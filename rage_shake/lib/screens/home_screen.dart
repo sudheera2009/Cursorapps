@@ -9,6 +9,7 @@ import '../widgets/shake_button.dart';
 import '../widgets/banner_ad_widget.dart';
 import 'mode_select_screen.dart';
 import 'profile_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -393,7 +394,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     _navigateToModeSelect(context);
                   }),
                   _buildNavItem(Icons.leaderboard, 'Ranks', false, () {}),
-                  _buildNavItem(Icons.settings, 'Settings', false, () {}),
+                  _buildNavItem(Icons.settings, 'Settings', false, () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                    );
+                  }),
                 ],
               ),
             ),
