@@ -5,6 +5,7 @@ import '../core/theme.dart';
 import '../models/game_state.dart';
 import '../providers/game_provider.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/banner_ad_widget.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -37,6 +38,8 @@ class ProfileScreen extends StatelessWidget {
                     _buildLevelCard(progress),
                     const SizedBox(height: 24),
                     _buildStatsSection(progress),
+                    const SizedBox(height: 24),
+                    const InlineBannerAd(),
                     const SizedBox(height: 24),
                     _buildAchievementsSection(),
                   ],

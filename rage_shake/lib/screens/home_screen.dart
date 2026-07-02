@@ -6,6 +6,7 @@ import '../core/theme.dart';
 import '../providers/game_provider.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/shake_button.dart';
+import '../widgets/banner_ad_widget.dart';
 import 'mode_select_screen.dart';
 import 'profile_screen.dart';
 
@@ -371,23 +372,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildBottomNav(BuildContext context) {
     return Positioned(
-      bottom: 24,
-      left: 24,
-      right: 24,
-      child: GlassCard(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        borderRadius: 30,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildNavItem(Icons.home, 'Home', true, () {}),
-            _buildNavItem(Icons.sports_esports, 'Modes', false, () {
-              _navigateToModeSelect(context);
-            }),
-            _buildNavItem(Icons.leaderboard, 'Ranks', false, () {}),
-            _buildNavItem(Icons.settings, 'Settings', false, () {}),
-          ],
-        ),
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const BannerAdWidget(),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+            child: GlassCard(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+              borderRadius: 30,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildNavItem(Icons.home, 'Home', true, () {}),
+                  _buildNavItem(Icons.sports_esports, 'Modes', false, () {
+                    _navigateToModeSelect(context);
+                  }),
+                  _buildNavItem(Icons.leaderboard, 'Ranks', false, () {}),
+                  _buildNavItem(Icons.settings, 'Settings', false, () {}),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
