@@ -9,6 +9,7 @@ import '../models/destruction_mode.dart';
 import '../providers/game_provider.dart';
 import '../widgets/rage_meter.dart';
 import '../widgets/particle_system.dart';
+import '../widgets/combo_display.dart';
 import 'results_screen.dart';
 
 class GameScreen extends StatefulWidget {
@@ -314,19 +315,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   ),
                 ),
                 if (session.currentCombo > 1)
-                  Text(
-                    'x${session.currentCombo} COMBO',
-                    style: AppTheme.subtitleStyle.copyWith(
-                      color: Colors.amber,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  )
-                      .animate(onPlay: (c) => c.repeat(reverse: true))
-                      .scale(
-                        begin: const Offset(1, 1),
-                        end: const Offset(1.1, 1.1),
-                        duration: 200.ms,
-                      ),
+                  ComboDisplay(combo: session.currentCombo),
               ],
             ),
             Column(

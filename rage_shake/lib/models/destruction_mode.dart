@@ -136,7 +136,64 @@ class DestructionModes {
     ],
   );
 
-  static List<DestructionMode> get all => [office, kitchen, cars, city, space];
+  static const volcano = DestructionMode(
+    id: 'volcano',
+    name: 'VOLCANO FURY',
+    description: 'Unleash volcanic destruction. Melt everything in your path.',
+    icon: Icons.volcano,
+    color: Color(0xFFFF5722),
+    requiredLevel: 7,
+    backgroundGradientStart: '#3d1a0a',
+    backgroundGradientEnd: '#1a0a05',
+    objects: [
+      DestructibleObject(name: 'Boulder', icon: Icons.circle, baseValue: 5000),
+      DestructibleObject(name: 'Lava Rock', icon: Icons.hexagon, baseValue: 8000),
+      DestructibleObject(name: 'Volcano', icon: Icons.volcano, baseValue: 50000, size: 2.0),
+      DestructibleObject(name: 'Mountain', icon: Icons.terrain, baseValue: 100000, size: 2.5),
+      DestructibleObject(name: 'Island', icon: Icons.landscape, baseValue: 200000, size: 2.0),
+      DestructibleObject(name: 'Tectonic Plate', icon: Icons.layers, baseValue: 500000, size: 3.0),
+    ],
+  );
+
+  static const underwater = DestructionMode(
+    id: 'underwater',
+    name: 'DEEP SEA HAVOC',
+    description: 'Wreck submarines, ships, and ancient underwater ruins.',
+    icon: Icons.water,
+    color: Color(0xFF26C6DA),
+    requiredLevel: 8,
+    backgroundGradientStart: '#0a2a3a',
+    backgroundGradientEnd: '#051520',
+    objects: [
+      DestructibleObject(name: 'Coral', icon: Icons.park, baseValue: 2000),
+      DestructibleObject(name: 'Submarine', icon: Icons.directions_boat, baseValue: 30000, size: 1.5),
+      DestructibleObject(name: 'Shipwreck', icon: Icons.sailing, baseValue: 50000, size: 1.8),
+      DestructibleObject(name: 'Oil Rig', icon: Icons.oil_barrel, baseValue: 150000, size: 2.0),
+      DestructibleObject(name: 'Underwater City', icon: Icons.location_city, baseValue: 500000, size: 2.5),
+      DestructibleObject(name: 'Kraken', icon: Icons.pest_control, baseValue: 1000000, size: 3.0),
+    ],
+  );
+
+  static const haunted = DestructionMode(
+    id: 'haunted',
+    name: 'HAUNTED HORROR',
+    description: 'Destroy cursed objects and banish supernatural entities.',
+    icon: Icons.castle,
+    color: Color(0xFF7E57C2),
+    requiredLevel: 12,
+    backgroundGradientStart: '#1a0a2a',
+    backgroundGradientEnd: '#0a0515',
+    objects: [
+      DestructibleObject(name: 'Coffin', icon: Icons.inbox, baseValue: 10000),
+      DestructibleObject(name: 'Tombstone', icon: Icons.space_bar, baseValue: 15000),
+      DestructibleObject(name: 'Ghost', icon: Icons.blur_on, baseValue: 50000),
+      DestructibleObject(name: 'Haunted Mansion', icon: Icons.castle, baseValue: 200000, size: 2.0),
+      DestructibleObject(name: 'Demon Portal', icon: Icons.blur_circular, baseValue: 500000, size: 1.5),
+      DestructibleObject(name: 'Ancient Curse', icon: Icons.auto_fix_high, baseValue: 1000000, size: 2.5),
+    ],
+  );
+
+  static List<DestructionMode> get all => [office, kitchen, cars, city, volcano, underwater, space, haunted];
 
   static DestructionMode getById(String id) {
     return all.firstWhere((mode) => mode.id == id, orElse: () => office);

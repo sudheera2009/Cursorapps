@@ -1,0 +1,252 @@
+import 'package:flutter/material.dart';
+
+class Achievement {
+  final String id;
+  final String name;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final AchievementType type;
+  final int requirement;
+  final int xpReward;
+
+  const Achievement({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.type,
+    required this.requirement,
+    this.xpReward = 100,
+  });
+}
+
+enum AchievementType {
+  totalDestruction,
+  singleSession,
+  objectsDestroyed,
+  maxCombo,
+  sessionsPlayed,
+  rageLevel,
+  modeComplete,
+  streak,
+  special,
+}
+
+class Achievements {
+  static const List<Achievement> all = [
+    Achievement(
+      id: 'first_blood',
+      name: 'First Blood',
+      description: 'Complete your first destruction session',
+      icon: Icons.star,
+      color: Color(0xFFFFD700),
+      type: AchievementType.sessionsPlayed,
+      requirement: 1,
+      xpReward: 50,
+    ),
+    Achievement(
+      id: 'ten_sessions',
+      name: 'Getting Warmed Up',
+      description: 'Complete 10 destruction sessions',
+      icon: Icons.whatshot,
+      color: Color(0xFFFF9800),
+      type: AchievementType.sessionsPlayed,
+      requirement: 10,
+      xpReward: 200,
+    ),
+    Achievement(
+      id: 'fifty_sessions',
+      name: 'Rage Addict',
+      description: 'Complete 50 destruction sessions',
+      icon: Icons.local_fire_department,
+      color: Color(0xFFF44336),
+      type: AchievementType.sessionsPlayed,
+      requirement: 50,
+      xpReward: 500,
+    ),
+    Achievement(
+      id: 'hundred_sessions',
+      name: 'Destruction Master',
+      description: 'Complete 100 destruction sessions',
+      icon: Icons.military_tech,
+      color: Color(0xFF9C27B0),
+      type: AchievementType.sessionsPlayed,
+      requirement: 100,
+      xpReward: 1000,
+    ),
+    Achievement(
+      id: 'thousand_objects',
+      name: 'Object Obliterator',
+      description: 'Destroy 1,000 objects total',
+      icon: Icons.broken_image,
+      color: Color(0xFF2196F3),
+      type: AchievementType.objectsDestroyed,
+      requirement: 1000,
+      xpReward: 300,
+    ),
+    Achievement(
+      id: 'ten_thousand_objects',
+      name: 'Annihilation Expert',
+      description: 'Destroy 10,000 objects total',
+      icon: Icons.blur_circular,
+      color: Color(0xFF00BCD4),
+      type: AchievementType.objectsDestroyed,
+      requirement: 10000,
+      xpReward: 750,
+    ),
+    Achievement(
+      id: 'million_damage',
+      name: 'Millionaire Destroyer',
+      description: 'Deal \$1,000,000 total destruction',
+      icon: Icons.attach_money,
+      color: Color(0xFF4CAF50),
+      type: AchievementType.totalDestruction,
+      requirement: 1000000,
+      xpReward: 400,
+    ),
+    Achievement(
+      id: 'billion_damage',
+      name: 'Billion Dollar Rampage',
+      description: 'Deal \$1,000,000,000 total destruction',
+      icon: Icons.monetization_on,
+      color: Color(0xFFFFD700),
+      type: AchievementType.totalDestruction,
+      requirement: 1000000000,
+      xpReward: 2000,
+    ),
+    Achievement(
+      id: 'combo_25',
+      name: 'Combo Starter',
+      description: 'Reach a 25x combo',
+      icon: Icons.bolt,
+      color: Color(0xFFFFEB3B),
+      type: AchievementType.maxCombo,
+      requirement: 25,
+      xpReward: 150,
+    ),
+    Achievement(
+      id: 'combo_50',
+      name: 'Combo King',
+      description: 'Reach a 50x combo',
+      icon: Icons.flash_on,
+      color: Color(0xFFFF9800),
+      type: AchievementType.maxCombo,
+      requirement: 50,
+      xpReward: 300,
+    ),
+    Achievement(
+      id: 'combo_100',
+      name: 'Combo God',
+      description: 'Reach a 100x combo',
+      icon: Icons.electric_bolt,
+      color: Color(0xFFF44336),
+      type: AchievementType.maxCombo,
+      requirement: 100,
+      xpReward: 600,
+    ),
+    Achievement(
+      id: 'nuclear_rage',
+      name: 'Nuclear Meltdown',
+      description: 'Reach NUCLEAR rage level',
+      icon: Icons.warning,
+      color: Color(0xFFFF5722),
+      type: AchievementType.rageLevel,
+      requirement: 5,
+      xpReward: 250,
+    ),
+    Achievement(
+      id: 'session_1m',
+      name: 'Quick Million',
+      description: 'Deal \$1,000,000 in a single session',
+      icon: Icons.speed,
+      color: Color(0xFF00E676),
+      type: AchievementType.singleSession,
+      requirement: 1000000,
+      xpReward: 350,
+    ),
+    Achievement(
+      id: 'session_10m',
+      name: 'Ten Million Terror',
+      description: 'Deal \$10,000,000 in a single session',
+      icon: Icons.rocket,
+      color: Color(0xFF2962FF),
+      type: AchievementType.singleSession,
+      requirement: 10000000,
+      xpReward: 700,
+    ),
+    Achievement(
+      id: 'session_100m',
+      name: 'Hundred Million Havoc',
+      description: 'Deal \$100,000,000 in a single session',
+      icon: Icons.auto_awesome,
+      color: Color(0xFFD500F9),
+      type: AchievementType.singleSession,
+      requirement: 100000000,
+      xpReward: 1500,
+    ),
+    Achievement(
+      id: 'all_modes',
+      name: 'Mode Master',
+      description: 'Play every destruction mode at least once',
+      icon: Icons.grid_view,
+      color: Color(0xFF673AB7),
+      type: AchievementType.modeComplete,
+      requirement: 8,
+      xpReward: 500,
+    ),
+    Achievement(
+      id: 'daily_streak_7',
+      name: 'Week Warrior',
+      description: 'Play 7 days in a row',
+      icon: Icons.calendar_today,
+      color: Color(0xFF009688),
+      type: AchievementType.streak,
+      requirement: 7,
+      xpReward: 400,
+    ),
+    Achievement(
+      id: 'daily_streak_30',
+      name: 'Monthly Madness',
+      description: 'Play 30 days in a row',
+      icon: Icons.event_available,
+      color: Color(0xFFE91E63),
+      type: AchievementType.streak,
+      requirement: 30,
+      xpReward: 1000,
+    ),
+    Achievement(
+      id: 'shake_master',
+      name: 'Shake Master',
+      description: 'Maintain max shake intensity for 10 seconds',
+      icon: Icons.vibration,
+      color: Color(0xFFFF6D00),
+      type: AchievementType.special,
+      requirement: 10,
+      xpReward: 300,
+    ),
+    Achievement(
+      id: 'speed_demon',
+      name: 'Speed Demon',
+      description: 'Destroy 100 objects in under 60 seconds',
+      icon: Icons.timer,
+      color: Color(0xFF00B8D4),
+      type: AchievementType.special,
+      requirement: 100,
+      xpReward: 400,
+    ),
+  ];
+
+  static Achievement? getById(String id) {
+    try {
+      return all.firstWhere((a) => a.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static List<Achievement> getByType(AchievementType type) {
+    return all.where((a) => a.type == type).toList();
+  }
+}
