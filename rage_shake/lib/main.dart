@@ -4,8 +4,9 @@ import 'package:provider/provider.dart';
 import 'core/theme.dart';
 import 'providers/game_provider.dart';
 import 'screens/home_screen.dart';
+import 'services/ad_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   SystemChrome.setPreferredOrientations([
@@ -19,6 +20,8 @@ void main() {
     systemNavigationBarColor: Color(0xFF0A0A0F),
     systemNavigationBarIconBrightness: Brightness.light,
   ));
+
+  await AdService().initialize();
 
   runApp(const RageShakeApp());
 }

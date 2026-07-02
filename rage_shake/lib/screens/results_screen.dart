@@ -6,6 +6,8 @@ import '../core/theme.dart';
 import '../models/game_state.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/shake_button.dart';
+import '../widgets/banner_ad_widget.dart';
+import '../services/ad_service.dart';
 import 'home_screen.dart';
 import 'game_screen.dart';
 
@@ -24,6 +26,8 @@ class _ResultsScreenState extends State<ResultsScreen>
   late AnimationController _scoreController;
   late Animation<int> _scoreAnimation;
   bool _showStats = false;
+  bool _bonusClaimed = false;
+  int _bonusAmount = 0;
 
   @override
   void initState() {
@@ -384,6 +388,72 @@ class _ResultsScreenState extends State<ResultsScreen>
   Widget _buildActions(BuildContext context) {
     return Column(
       children: [
+        if (!_bonusClaimed)
+          GestureDetector(
+            onTap: _watchAdForBonus,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                ),
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.amber.withOpacity(0.4),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.play_circle_filled, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Text(
+                    'WATCH AD FOR 2X BONUS',
+                    style: AppTheme.titleStyle.copyWith(
+                      color: Colors.white,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+              .animate()
+              .fadeIn(delay: 400.ms, duration: 400.ms)
+              .slideY(begin: 0.2, end: 0)
+        else
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: Colors.green),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.check_circle, color: Colors.green),
+                const SizedBox(width: 12),
+                Text(
+                  '+${_formatScore(_bonusAmount)} BONUS CLAIMED!',
+                  style: AppTheme.titleStyle.copyWith(
+                    color: Colors.green,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          )
+              .animate()
+              .fadeIn(duration: 400.ms)
+              .scale(begin: const Offset(0.9, 0.9)),
+        const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
@@ -408,6 +478,8 @@ class _ResultsScreenState extends State<ResultsScreen>
             .animate()
             .fadeIn(delay: 500.ms, duration: 400.ms)
             .slideY(begin: 0.2, end: 0),
+        const SizedBox(height: 16),
+        const BannerAdWidget(),
         const SizedBox(height: 16),
         GestureDetector(
           onTap: () => _goHome(context),
@@ -434,6 +506,18 @@ class _ResultsScreenState extends State<ResultsScreen>
     );
   }
 
+  void _watchAdForBonus() {
+    AdService().showRewardedAd(
+      onRewarded: (amount) {
+        setState(() {
+          _bonusClaimed = true;
+          _bonusAmount = widget.session.totalDamage;
+        });
+      },
+      onAdClosed: () {},
+    );
+  }
+
   void _shareResult() {
     final text = '''
 🔥 RAGE SHAKE RESULTS 🔥
@@ -450,19 +534,31 @@ Can you beat my score? Download RAGE SHAKE now!
   }
 
   void _playAgain(BuildContext context) {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => GameScreen(mode: widget.session.mode),
-      ),
+    AdService().showInterstitialAd(
+      onAdClosed: () {
+        if (context.mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => GameScreen(mode: widget.session.mode),
+            ),
+          );
+        }
+      },
     );
   }
 
   void _goHome(BuildContext context) {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
-      (route) => false,
+    AdService().showInterstitialAd(
+      onAdClosed: () {
+        if (context.mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (route) => false,
+          );
+        }
+      },
     );
   }
 
