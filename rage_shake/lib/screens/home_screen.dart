@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
+import '../models/daily_challenge.dart';
 import '../providers/game_provider.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/shake_button.dart';
@@ -259,54 +260,130 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildDailyChallenge(GameProvider provider) {
+    final challenges = provider.todaysChallenges;
+    final completedCount = provider.completedDailyChallenges.length;
+    
     return GlassCard(
       padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.flag, color: Colors.amber, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Daily Challenges',
+                style: AppTheme.subtitleStyle.copyWith(
+                  color: Colors.amber,
+                  fontSize: 16,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: completedCount == 3 
+                      ? Colors.green.withOpacity(0.3)
+                      : Colors.amber.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$completedCount/3',
+                  style: AppTheme.bodyStyle.copyWith(
+                    color: completedCount == 3 ? Colors.green : Colors.amber,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...challenges.map((challenge) => _buildChallengeItem(provider, challenge)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChallengeItem(GameProvider provider, DailyChallenge challenge) {
+    final isCompleted = provider.isChallengeCompleted(challenge);
+    final progress = provider.getChallengeProgress(challenge);
+    final progressText = provider.getChallengeProgressText(challenge);
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              color: Colors.amber.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
+              color: isCompleted 
+                  ? Colors.green.withOpacity(0.3)
+                  : challenge.color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.flag, color: Colors.amber),
+            child: Icon(
+              isCompleted ? Icons.check : challenge.icon,
+              color: isCompleted ? Colors.green : challenge.color,
+              size: 18,
+            ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Daily Challenge',
-                  style: AppTheme.subtitleStyle.copyWith(
-                    color: Colors.amber,
-                    fontSize: 14,
+                  challenge.title,
+                  style: AppTheme.bodyStyle.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isCompleted ? Colors.green : Colors.white,
+                    decoration: isCompleted ? TextDecoration.lineThrough : null,
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  'Destroy 50 objects',
-                  style: AppTheme.bodyStyle,
-                ),
-                const SizedBox(height: 8),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(5),
+                  borderRadius: BorderRadius.circular(3),
                   child: LinearProgressIndicator(
-                    value: (provider.userProgress.totalObjects % 50) / 50,
-                    minHeight: 4,
+                    value: isCompleted ? 1.0 : progress,
+                    minHeight: 3,
                     backgroundColor: Colors.white.withOpacity(0.1),
-                    valueColor: const AlwaysStoppedAnimation(Colors.amber),
+                    valueColor: AlwaysStoppedAnimation(
+                      isCompleted ? Colors.green : challenge.color,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          Text(
-            '${provider.userProgress.totalObjects % 50}/50',
-            style: AppTheme.numberStyle.copyWith(
-              fontSize: 18,
-              color: Colors.amber,
-            ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                progressText,
+                style: AppTheme.bodyStyle.copyWith(
+                  fontSize: 11,
+                  color: isCompleted ? Colors.green : challenge.color,
+                ),
+              ),
+              Text(
+                '+${challenge.xpReward} XP',
+                style: AppTheme.bodyStyle.copyWith(
+                  fontSize: 10,
+                  color: AppTheme.textMuted,
+                ),
+              ),
+            ],
           ),
         ],
       ),

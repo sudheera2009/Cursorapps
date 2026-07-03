@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:confetti/confetti.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../models/game_state.dart';
+import '../models/achievement.dart';
+import '../providers/game_provider.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/shake_button.dart';
 import '../widgets/banner_ad_widget.dart';
@@ -102,6 +105,8 @@ class _ResultsScreenState extends State<ResultsScreen>
                     _buildStatsGrid(),
                     const SizedBox(height: 24),
                     _buildRageStats(),
+                    const SizedBox(height: 24),
+                    _buildNewAchievements(),
                     const SizedBox(height: 40),
                   ],
                   _buildActions(context),
@@ -385,6 +390,99 @@ class _ResultsScreenState extends State<ResultsScreen>
         .slideX(begin: 0.1, end: 0);
   }
 
+  Widget _buildNewAchievements() {
+    final provider = Provider.of<GameProvider>(context, listen: false);
+    final newAchievements = provider.newlyUnlockedAchievements;
+    
+    if (newAchievements.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.emoji_events, color: Colors.amber, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'NEW ACHIEVEMENTS!',
+              style: AppTheme.subtitleStyle.copyWith(
+                color: Colors.amber,
+                letterSpacing: 2,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ...newAchievements.map((achievement) => Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: GlassCard(
+            glowColor: achievement.color,
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: achievement.color.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    achievement.icon,
+                    color: achievement.color,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        achievement.name,
+                        style: AppTheme.subtitleStyle.copyWith(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        achievement.description,
+                        style: AppTheme.bodyStyle.copyWith(
+                          fontSize: 12,
+                          color: AppTheme.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: achievement.color.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '+${achievement.xpReward} XP',
+                    style: AppTheme.bodyStyle.copyWith(
+                      color: achievement.color,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+              .animate()
+              .fadeIn(duration: 400.ms)
+              .slideX(begin: 0.2, end: 0)
+              .shimmer(delay: 500.ms, duration: 1.seconds, color: achievement.color.withOpacity(0.3)),
+        )),
+      ],
+    );
+  }
+
   Widget _buildActions(BuildContext context) {
     return Column(
       children: [
@@ -513,6 +611,11 @@ class _ResultsScreenState extends State<ResultsScreen>
           _bonusClaimed = true;
           _bonusAmount = widget.session.totalDamage;
         });
+        // Actually apply the 2X bonus to user progress
+        final provider = Provider.of<GameProvider>(context, listen: false);
+        final bonusXP = widget.session.totalDamage ~/ 100;
+        provider.userProgress.addXP(bonusXP);
+        provider.userProgress.totalDestruction += widget.session.totalDamage;
       },
       onAdClosed: () {},
     );
