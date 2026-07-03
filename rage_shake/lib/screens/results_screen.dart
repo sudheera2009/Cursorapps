@@ -611,11 +611,9 @@ class _ResultsScreenState extends State<ResultsScreen>
           _bonusClaimed = true;
           _bonusAmount = widget.session.totalDamage;
         });
-        // Actually apply the 2X bonus to user progress
+        // Actually apply the 2X bonus to user progress and SAVE it
         final provider = Provider.of<GameProvider>(context, listen: false);
-        final bonusXP = widget.session.totalDamage ~/ 100;
-        provider.userProgress.addXP(bonusXP);
-        provider.userProgress.totalDestruction += widget.session.totalDamage;
+        provider.applyRewardedBonus(widget.session.totalDamage);
       },
       onAdClosed: () {},
     );

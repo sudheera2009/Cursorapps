@@ -14,12 +14,16 @@ class SoundService {
   bool _soundEnabled = true;
   bool _musicEnabled = true;
   bool _hapticsEnabled = true;
+  bool _screenShakeEnabled = true;
+  bool _particlesEnabled = true;
   double _soundVolume = 0.8;
   double _musicVolume = 0.5;
 
   bool get soundEnabled => _soundEnabled;
   bool get musicEnabled => _musicEnabled;
   bool get hapticsEnabled => _hapticsEnabled;
+  bool get screenShakeEnabled => _screenShakeEnabled;
+  bool get particlesEnabled => _particlesEnabled;
   double get soundVolume => _soundVolume;
   double get musicVolume => _musicVolume;
 
@@ -28,6 +32,8 @@ class SoundService {
     _soundEnabled = prefs.getBool('soundEnabled') ?? true;
     _musicEnabled = prefs.getBool('musicEnabled') ?? true;
     _hapticsEnabled = prefs.getBool('hapticsEnabled') ?? true;
+    _screenShakeEnabled = prefs.getBool('screenShakeEnabled') ?? true;
+    _particlesEnabled = prefs.getBool('particlesEnabled') ?? true;
     _soundVolume = prefs.getDouble('soundVolume') ?? 0.8;
     _musicVolume = prefs.getDouble('musicVolume') ?? 0.5;
 
@@ -40,8 +46,20 @@ class SoundService {
     await prefs.setBool('soundEnabled', _soundEnabled);
     await prefs.setBool('musicEnabled', _musicEnabled);
     await prefs.setBool('hapticsEnabled', _hapticsEnabled);
+    await prefs.setBool('screenShakeEnabled', _screenShakeEnabled);
+    await prefs.setBool('particlesEnabled', _particlesEnabled);
     await prefs.setDouble('soundVolume', _soundVolume);
     await prefs.setDouble('musicVolume', _musicVolume);
+  }
+
+  void setScreenShakeEnabled(bool enabled) {
+    _screenShakeEnabled = enabled;
+    _saveSettings();
+  }
+
+  void setParticlesEnabled(bool enabled) {
+    _particlesEnabled = enabled;
+    _saveSettings();
   }
 
   void setSoundEnabled(bool enabled) {
