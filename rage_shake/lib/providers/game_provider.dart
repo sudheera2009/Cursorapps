@@ -26,6 +26,10 @@ class GameProvider extends ChangeNotifier {
   bool _reachedNuclearThisSession = false;
   int _previousLevel = 1;
   
+  // Shake master tracking (sustained high intensity)
+  DateTime? _highIntensityStart;
+  int _maxSustainedHighIntensitySeconds = 0;
+  
   // Daily challenge tracking
   List<DailyChallenge> _todaysChallenges = [];
   Map<String, int> _dailyChallengeProgress = {};
@@ -137,7 +141,12 @@ class GameProvider extends ChangeNotifier {
       await prefs.setString('lastPlayDate', now.toIso8601String());
       await prefs.setInt('dailyDestruction', 0);
       await prefs.setInt('dailySessions', 0);
+      await prefs.setInt('dailyObjects', 0);
+      await prefs.setInt('dailyDamage', 0);
+      await prefs.setInt('dailyMaxCombo', 0);
+      await prefs.setBool('dailyReachedNuclear', false);
       await prefs.setStringList('completedDailyChallenges', []);
+      await prefs.setStringList('dailyModesPlayed', []);
     } else {
       // Same day - load daily progress
       _dailySessions = prefs.getInt('dailySessions') ?? 0;
@@ -252,10 +261,29 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Apply rewarded ad bonus and persist it
+  Future<void> applyRewardedBonus(int sessionDamage) async {
+    final bonusXP = sessionDamage ~/ 100;
+    _userProgress.addXP(bonusXP);
+    _userProgress.totalDestruction += sessionDamage;
+    _userProgress.dailyDestruction += sessionDamage;
+    
+    // Update daily damage for challenges
+    _dailyDamage += sessionDamage;
+    _updateChallengeProgress();
+    _checkDailyChallenges();
+    
+    // Save the bonus
+    await _saveProgress();
+    notifyListeners();
+  }
+
   void startGame(DestructionMode mode) {
     _currentSession = GameSession(mode: mode, isActive: true);
     _reachedNuclearThisSession = false;
     _previousLevel = _userProgress.currentLevel;
+    _highIntensityStart = null;
+    _maxSustainedHighIntensitySeconds = 0;
     floatingDamages.clear();
     particles.clear();
     
@@ -369,6 +397,9 @@ class GameProvider extends ChangeNotifier {
           if (achievement.id == 'speed_demon') {
             unlocked = session.objectsDestroyed >= 100 && 
                        session.duration.inSeconds <= 60;
+          } else if (achievement.id == 'shake_master') {
+            // Check if maintained max intensity for 10+ seconds
+            unlocked = _maxSustainedHighIntensitySeconds >= achievement.requirement;
           }
           break;
       }
@@ -390,6 +421,9 @@ class GameProvider extends ChangeNotifier {
     
     _currentShakeIntensity = normalizedMagnitude;
     _isShaking = normalizedMagnitude > 0.1;
+    
+    // Track sustained high intensity for shake_master achievement
+    _trackHighIntensityShake(normalizedMagnitude);
     
     _currentSession!.updateRage(normalizedMagnitude);
     final newRageLevel = RageColors.getLevel(_currentSession!.rageLevel);
@@ -414,6 +448,23 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _trackHighIntensityShake(double intensity) {
+    // High intensity is >= 0.8 (80% of max)
+    if (intensity >= 0.8) {
+      if (_highIntensityStart == null) {
+        _highIntensityStart = DateTime.now();
+      } else {
+        final duration = DateTime.now().difference(_highIntensityStart!).inSeconds;
+        if (duration > _maxSustainedHighIntensitySeconds) {
+          _maxSustainedHighIntensitySeconds = duration;
+        }
+      }
+    } else {
+      // Reset if intensity drops
+      _highIntensityStart = null;
+    }
+  }
+
   void _destroyRandomObject() {
     if (_currentSession == null) return;
     
@@ -425,9 +476,15 @@ class GameProvider extends ChangeNotifier {
     
     _currentSession!.addDamage(damage);
     
-    // Play sound based on combo milestones
-    if (_currentSession!.currentCombo > 0 && _currentSession!.currentCombo % 10 == 0) {
+    // Play sound based on combo milestones and rage level
+    if (_currentSession!.currentCombo > 0 && _currentSession!.currentCombo % 25 == 0) {
+      // Big milestone - play explosion
+      _soundService.playExplosion();
+    } else if (_currentSession!.currentCombo > 0 && _currentSession!.currentCombo % 10 == 0) {
       _soundService.playCombo();
+    } else if (_currentSession!.rageLevel > 0.8) {
+      // High rage level - occasional explosion sound
+      _soundService.playExplosion();
     } else {
       _soundService.playDestroy();
     }

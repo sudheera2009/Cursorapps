@@ -184,8 +184,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.flash_on,
                 title: 'Screen Shake',
                 subtitle: 'Visual shake effect',
-                value: true,
-                onChanged: (value) {},
+                value: _soundService.screenShakeEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    _soundService.setScreenShakeEnabled(value);
+                  });
+                },
                 color: Colors.amber,
               ),
               const Divider(color: AppTheme.cardBorder, height: 32),
@@ -193,8 +197,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.auto_awesome,
                 title: 'Particle Effects',
                 subtitle: 'Explosion particles',
-                value: true,
-                onChanged: (value) {},
+                value: _soundService.particlesEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    _soundService.setParticlesEnabled(value);
+                  });
+                },
                 color: Colors.pink,
               ),
             ],

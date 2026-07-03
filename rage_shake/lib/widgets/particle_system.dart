@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../providers/game_provider.dart';
 import '../core/theme.dart';
+import '../services/sound_service.dart';
 
 class ParticleOverlay extends StatelessWidget {
   final List<Particle> particles;
@@ -17,6 +18,21 @@ class ParticleOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final particlesEnabled = SoundService().particlesEnabled;
+    
+    // If particles disabled, only show damage numbers
+    if (!particlesEnabled) {
+      return Stack(
+        children: [
+          ...damages.map((damage) => Positioned(
+            left: damage.position.dx - 30,
+            top: damage.position.dy + damage.offsetY,
+            child: DamageNumber(damage: damage),
+          )),
+        ],
+      );
+    }
+    
     return Stack(
       children: [
         if (rageLevel > 0.6)
@@ -296,7 +312,10 @@ class _ScreenShakeState extends State<ScreenShake>
 
   @override
   Widget build(BuildContext context) {
-    if (widget.intensity < 0.1) {
+    // Check if screen shake is enabled in settings
+    final shakeEnabled = SoundService().screenShakeEnabled;
+    
+    if (widget.intensity < 0.1 || !shakeEnabled) {
       return widget.child;
     }
 
