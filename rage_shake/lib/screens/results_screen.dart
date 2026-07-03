@@ -11,6 +11,7 @@ import '../widgets/glass_card.dart';
 import '../widgets/shake_button.dart';
 import '../widgets/banner_ad_widget.dart';
 import '../services/ad_service.dart';
+import '../services/screenshot_service.dart';
 import 'home_screen.dart';
 import 'game_screen.dart';
 
@@ -31,6 +32,10 @@ class _ResultsScreenState extends State<ResultsScreen>
   bool _showStats = false;
   bool _bonusClaimed = false;
   int _bonusAmount = 0;
+  
+  final GlobalKey _captureKey = GlobalKey();
+  final ScreenshotService _screenshotService = ScreenshotService();
+  bool _isCapturing = false;
 
   @override
   void initState() {
@@ -96,16 +101,28 @@ class _ResultsScreenState extends State<ResultsScreen>
               padding: const EdgeInsets.all(24),
               child: Column(
                 children: [
-                  const SizedBox(height: 40),
-                  _buildHeader(),
-                  const SizedBox(height: 40),
-                  _buildScoreCard(),
-                  const SizedBox(height: 24),
+                  RepaintBoundary(
+                    key: _captureKey,
+                    child: Container(
+                      color: const Color(0xFF0A0A0F),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 40),
+                          _buildHeader(),
+                          const SizedBox(height: 40),
+                          _buildScoreCard(),
+                          const SizedBox(height: 24),
+                          if (_showStats) ...[
+                            _buildStatsGrid(),
+                            const SizedBox(height: 24),
+                            _buildRageStats(),
+                            const SizedBox(height: 24),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
                   if (_showStats) ...[
-                    _buildStatsGrid(),
-                    const SizedBox(height: 24),
-                    _buildRageStats(),
-                    const SizedBox(height: 24),
                     _buildNewAchievements(),
                     const SizedBox(height: 40),
                   ],
@@ -565,6 +582,15 @@ class _ResultsScreenState extends State<ResultsScreen>
             const SizedBox(width: 12),
             Expanded(
               child: MiniShakeButton(
+                onPressed: _captureAndShare,
+                text: _isCapturing ? '...' : 'CLIP',
+                icon: Icons.camera_alt,
+                color: Colors.purple,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: MiniShakeButton(
                 onPressed: () => _playAgain(context),
                 text: 'AGAIN',
                 icon: Icons.replay,
@@ -632,6 +658,50 @@ class _ResultsScreenState extends State<ResultsScreen>
 Can you beat my score? Download RAGE SHAKE now!
     ''';
     Share.share(text);
+  }
+
+  Future<void> _captureAndShare() async {
+    if (_isCapturing) return;
+    
+    setState(() => _isCapturing = true);
+    
+    try {
+      final bytes = await _screenshotService.captureWidget(_captureKey);
+      if (bytes != null) {
+        // Save the clip
+        await _screenshotService.saveScreenshot(bytes, 'rage_result');
+        
+        // Share with custom text
+        final shareText = _screenshotService.createShareText(
+          damage: widget.session.totalDamage,
+          objects: widget.session.objectsDestroyed,
+          combo: widget.session.maxCombo,
+          mode: widget.session.mode.name,
+        );
+        
+        await _screenshotService.shareScreenshot(bytes, text: shareText);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Rage Clip saved and shared!'),
+              backgroundColor: Colors.purple,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to capture: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+    
+    setState(() => _isCapturing = false);
   }
 
   void _playAgain(BuildContext context) {
