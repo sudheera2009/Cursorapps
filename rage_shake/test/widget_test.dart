@@ -3,6 +3,8 @@ import 'package:rage_shake/core/theme.dart';
 import 'package:rage_shake/models/destruction_mode.dart';
 import 'package:rage_shake/models/achievement.dart';
 import 'package:rage_shake/models/daily_challenge.dart';
+import 'package:rage_shake/models/app_theme.dart';
+import 'package:rage_shake/models/game_state.dart';
 
 void main() {
   group('Theme tests', () {
@@ -58,8 +60,8 @@ void main() {
   });
 
   group('Achievement tests', () {
-    test('All 20 achievements are defined', () {
-      expect(Achievements.all.length, 20);
+    test('All 30 achievements are defined', () {
+      expect(Achievements.all.length, 30); // 20 original + 10 new
     });
 
     test('getById returns correct achievement', () {
@@ -72,11 +74,18 @@ void main() {
       final comboAchievements = Achievements.getByType(AchievementType.maxCombo);
       expect(comboAchievements.length, 3);
     });
+
+    test('New achievements exist', () {
+      expect(Achievements.getById('coin_collector_1k'), isNotNull);
+      expect(Achievements.getById('level_50'), isNotNull);
+      expect(Achievements.getById('early_bird'), isNotNull);
+      expect(Achievements.getById('night_owl'), isNotNull);
+    });
   });
 
   group('DailyChallenge tests', () {
     test('All challenges are defined', () {
-      expect(DailyChallenges.allChallenges.length, 12);
+      expect(DailyChallenges.allChallenges.length, 19); // 12 original + 7 new
     });
 
     test('getDailyChallenges returns 3 challenges', () {
@@ -97,6 +106,84 @@ void main() {
       final challenges1 = DailyChallenges.getDailyChallenges(date1);
       final challenges2 = DailyChallenges.getDailyChallenges(date2);
       expect(challenges1.map((c) => c.id), isNot(challenges2.map((c) => c.id)));
+    });
+
+    test('New challenge types exist', () {
+      final allChallenges = DailyChallenges.allChallenges;
+      expect(allChallenges.any((c) => c.type == DailyChallengeType.playDuration), true);
+      expect(allChallenges.any((c) => c.type == DailyChallengeType.earnCoins), true);
+    });
+  });
+
+  group('AppThemes tests', () {
+    test('All 8 themes are defined', () {
+      expect(AppThemes.all.length, 8);
+    });
+
+    test('Default theme is free', () {
+      final defaultTheme = AppThemes.getTheme('default');
+      expect(defaultTheme.type, ThemeType.free);
+      expect(defaultTheme.cost, 0);
+    });
+
+    test('Premium themes have costs', () {
+      final neonTheme = AppThemes.getTheme('neon_cyber');
+      expect(neonTheme.type, ThemeType.premium);
+      expect(neonTheme.cost, greaterThan(0));
+    });
+
+    test('getTheme returns default for unknown id', () {
+      final theme = AppThemes.getTheme('unknown_theme');
+      expect(theme.id, 'default');
+    });
+  });
+
+  group('UserProgress tests', () {
+    test('Initial values are correct', () {
+      final progress = UserProgress();
+      expect(progress.rageCoins, 0);
+      expect(progress.currentTheme, 'default');
+      expect(progress.unlockedThemes.contains('default'), true);
+      expect(progress.sessionHistory.isEmpty, true);
+    });
+
+    test('unlockTheme works correctly', () {
+      final progress = UserProgress(rageCoins: 1000);
+      final result = progress.unlockTheme('neon_cyber', 500);
+      expect(result, true);
+      expect(progress.rageCoins, 500);
+      expect(progress.unlockedThemes.contains('neon_cyber'), true);
+    });
+
+    test('unlockTheme fails without enough coins', () {
+      final progress = UserProgress(rageCoins: 100);
+      final result = progress.unlockTheme('neon_cyber', 500);
+      expect(result, false);
+      expect(progress.rageCoins, 100);
+    });
+  });
+
+  group('SessionRecord tests', () {
+    test('toJson and fromJson work correctly', () {
+      final record = SessionRecord(
+        damage: 1000000,
+        objects: 50,
+        maxCombo: 25,
+        modeId: 'office',
+        peakRage: 'furious',
+        durationSeconds: 120,
+        playedAt: DateTime(2024, 1, 15, 10, 30),
+      );
+
+      final json = record.toJson();
+      final restored = SessionRecord.fromJson(json);
+
+      expect(restored.damage, 1000000);
+      expect(restored.objects, 50);
+      expect(restored.maxCombo, 25);
+      expect(restored.modeId, 'office');
+      expect(restored.peakRage, 'furious');
+      expect(restored.durationSeconds, 120);
     });
   });
 }

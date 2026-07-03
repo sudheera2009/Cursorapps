@@ -40,6 +40,12 @@ class GameProvider extends ChangeNotifier {
   int _dailyMaxCombo = 0;
   bool _dailyReachedNuclear = false;
   Set<String> _dailyModesPlayed = {};
+  int _dailyPlayDuration = 0; // seconds
+  int _dailyCoinsEarned = 0;
+  
+  // Track if perfect session (no combo loss)
+  bool _perfectSession = true;
+  int _sessionCoinsEarned = 0;
   
   // Newly unlocked achievements (to show notifications)
   List<Achievement> _newlyUnlockedAchievements = [];
@@ -54,9 +60,28 @@ class GameProvider extends ChangeNotifier {
   Map<String, int> get dailyChallengeProgress => _dailyChallengeProgress;
   Set<String> get completedDailyChallenges => _completedDailyChallenges;
   List<Achievement> get newlyUnlockedAchievements => _newlyUnlockedAchievements;
+  int get dailyCoinsEarned => _dailyCoinsEarned;
+  int get dailyPlayDuration => _dailyPlayDuration;
 
   GameProvider() {
     _loadProgress();
+  }
+  
+  // Theme management
+  void setTheme(String themeId) {
+    _userProgress.currentTheme = themeId;
+    _saveProgress();
+    notifyListeners();
+  }
+  
+  bool purchaseTheme(String themeId, int cost) {
+    if (_userProgress.unlockTheme(themeId, cost)) {
+      _userProgress.currentTheme = themeId;
+      _saveProgress();
+      notifyListeners();
+      return true;
+    }
+    return false;
   }
 
   void clearNewAchievements() {
@@ -75,6 +100,12 @@ class GameProvider extends ChangeNotifier {
       currentXP: prefs.getInt('currentXP') ?? 0,
       dailyDestruction: prefs.getInt('dailyDestruction') ?? 0,
       lastPlayDate: DateTime.tryParse(prefs.getString('lastPlayDate') ?? '') ?? DateTime.now(),
+      rageCoins: prefs.getInt('rageCoins') ?? 0,
+      currentTheme: prefs.getString('currentTheme') ?? 'default',
+      bestSessionDamage: prefs.getInt('bestSessionDamage') ?? 0,
+      highestCombo: prefs.getInt('highestCombo') ?? 0,
+      mostObjectsSession: prefs.getInt('mostObjectsSession') ?? 0,
+      longestSession: prefs.getInt('longestSession') ?? 0,
     );
     
     // Load achievements
@@ -87,6 +118,31 @@ class GameProvider extends ChangeNotifier {
       final Map<String, dynamic> decoded = json.decode(highScoresJson);
       _userProgress.modeHighScores = decoded.map((k, v) => MapEntry(k, v as int));
     }
+    
+    // Load mode play counts
+    final modePlayCountsJson = prefs.getString('modePlayCounts');
+    if (modePlayCountsJson != null) {
+      final Map<String, dynamic> decoded = json.decode(modePlayCountsJson);
+      _userProgress.modePlayCounts = decoded.map((k, v) => MapEntry(k, v as int));
+    }
+    
+    // Load rage level counts
+    final rageLevelCountsJson = prefs.getString('rageLevelCounts');
+    if (rageLevelCountsJson != null) {
+      final Map<String, dynamic> decoded = json.decode(rageLevelCountsJson);
+      _userProgress.rageLevelCounts = decoded.map((k, v) => MapEntry(k, v as int));
+    }
+    
+    // Load session history
+    final sessionHistoryJson = prefs.getString('sessionHistory');
+    if (sessionHistoryJson != null) {
+      final List<dynamic> decoded = json.decode(sessionHistoryJson);
+      _userProgress.sessionHistory = decoded.map((e) => SessionRecord.fromJson(e)).toList();
+    }
+    
+    // Load unlocked themes
+    final unlockedThemesList = prefs.getStringList('unlockedThemes') ?? ['default'];
+    _userProgress.unlockedThemes = unlockedThemesList.toSet();
     
     // Load daily streak
     _userProgress.dailyStreak = prefs.getInt('dailyStreak') ?? 0;
@@ -133,6 +189,8 @@ class GameProvider extends ChangeNotifier {
       _dailyModesPlayed.clear();
       _completedDailyChallenges.clear();
       _dailyChallengeProgress.clear();
+      _dailyPlayDuration = 0;
+      _dailyCoinsEarned = 0;
       
       // Update last play date
       _userProgress.lastPlayDate = now;
@@ -147,6 +205,8 @@ class GameProvider extends ChangeNotifier {
       await prefs.setBool('dailyReachedNuclear', false);
       await prefs.setStringList('completedDailyChallenges', []);
       await prefs.setStringList('dailyModesPlayed', []);
+      await prefs.setInt('dailyPlayDuration', 0);
+      await prefs.setInt('dailyCoinsEarned', 0);
     } else {
       // Same day - load daily progress
       _dailySessions = prefs.getInt('dailySessions') ?? 0;
@@ -156,6 +216,8 @@ class GameProvider extends ChangeNotifier {
       _dailyReachedNuclear = prefs.getBool('dailyReachedNuclear') ?? false;
       _completedDailyChallenges = (prefs.getStringList('completedDailyChallenges') ?? []).toSet();
       _dailyModesPlayed = (prefs.getStringList('dailyModesPlayed') ?? []).toSet();
+      _dailyPlayDuration = prefs.getInt('dailyPlayDuration') ?? 0;
+      _dailyCoinsEarned = prefs.getInt('dailyCoinsEarned') ?? 0;
     }
   }
 
@@ -187,6 +249,12 @@ class GameProvider extends ChangeNotifier {
         case DailyChallengeType.playMode:
           progress = _dailyModesPlayed.length;
           break;
+        case DailyChallengeType.playDuration:
+          progress = _dailyPlayDuration;
+          break;
+        case DailyChallengeType.earnCoins:
+          progress = _dailyCoinsEarned;
+          break;
       }
       _dailyChallengeProgress[challenge.id] = progress;
     }
@@ -202,12 +270,33 @@ class GameProvider extends ChangeNotifier {
     await prefs.setInt('dailyDestruction', _userProgress.dailyDestruction);
     await prefs.setString('lastPlayDate', _userProgress.lastPlayDate.toIso8601String());
     await prefs.setInt('dailyStreak', _userProgress.dailyStreak);
+    await prefs.setInt('rageCoins', _userProgress.rageCoins);
+    await prefs.setString('currentTheme', _userProgress.currentTheme);
+    
+    // Save personal records
+    await prefs.setInt('bestSessionDamage', _userProgress.bestSessionDamage);
+    await prefs.setInt('highestCombo', _userProgress.highestCombo);
+    await prefs.setInt('mostObjectsSession', _userProgress.mostObjectsSession);
+    await prefs.setInt('longestSession', _userProgress.longestSession);
     
     // Save achievements
     await prefs.setStringList('achievements', _userProgress.achievements);
     
     // Save mode high scores
     await prefs.setString('modeHighScores', json.encode(_userProgress.modeHighScores));
+    
+    // Save mode play counts
+    await prefs.setString('modePlayCounts', json.encode(_userProgress.modePlayCounts));
+    
+    // Save rage level counts
+    await prefs.setString('rageLevelCounts', json.encode(_userProgress.rageLevelCounts));
+    
+    // Save session history (keep last 100)
+    final historyJson = _userProgress.sessionHistory.take(100).map((s) => s.toJson()).toList();
+    await prefs.setString('sessionHistory', json.encode(historyJson));
+    
+    // Save unlocked themes
+    await prefs.setStringList('unlockedThemes', _userProgress.unlockedThemes.toList());
     
     // Save modes played
     await prefs.setStringList('modesPlayed', _userProgress.modesPlayed.toList());
@@ -220,6 +309,8 @@ class GameProvider extends ChangeNotifier {
     await prefs.setBool('dailyReachedNuclear', _dailyReachedNuclear);
     await prefs.setStringList('completedDailyChallenges', _completedDailyChallenges.toList());
     await prefs.setStringList('dailyModesPlayed', _dailyModesPlayed.toList());
+    await prefs.setInt('dailyPlayDuration', _dailyPlayDuration);
+    await prefs.setInt('dailyCoinsEarned', _dailyCoinsEarned);
   }
 
   Future<void> resetAllProgress() async {
@@ -284,6 +375,8 @@ class GameProvider extends ChangeNotifier {
     _previousLevel = _userProgress.currentLevel;
     _highIntensityStart = null;
     _maxSustainedHighIntensitySeconds = 0;
+    _perfectSession = true;
+    _sessionCoinsEarned = 0;
     floatingDamages.clear();
     particles.clear();
     
@@ -310,8 +403,25 @@ class GameProvider extends ChangeNotifier {
       // Play victory sound
       _soundService.playVictory();
       
-      // Record session
-      _userProgress.recordSession(_currentSession!);
+      // Determine peak rage level
+      String peakRageLevel = 'calm';
+      if (_reachedNuclearThisSession) {
+        peakRageLevel = 'nuclear';
+      } else if (_currentSession!.rageLevel >= 0.8) {
+        peakRageLevel = 'furious';
+      } else if (_currentSession!.rageLevel >= 0.6) {
+        peakRageLevel = 'heated';
+      } else if (_currentSession!.rageLevel >= 0.3) {
+        peakRageLevel = 'annoyed';
+      }
+      
+      // Calculate coins earned this session
+      _sessionCoinsEarned = _currentSession!.totalDamage ~/ 10000;
+      _sessionCoinsEarned += _currentSession!.maxCombo ~/ 5;
+      if (_currentSession!.objectsDestroyed >= 50) _sessionCoinsEarned += 5;
+      
+      // Record session with peak rage level
+      _userProgress.recordSession(_currentSession!, peakRageLevel: peakRageLevel);
       
       // Track mode played
       _userProgress.modesPlayed.add(_currentSession!.mode.id);
@@ -321,6 +431,8 @@ class GameProvider extends ChangeNotifier {
       _dailySessions++;
       _dailyObjects += _currentSession!.objectsDestroyed;
       _dailyDamage += _currentSession!.totalDamage;
+      _dailyPlayDuration += _currentSession!.duration.inSeconds;
+      _dailyCoinsEarned += _sessionCoinsEarned;
       if (_currentSession!.maxCombo > _dailyMaxCombo) {
         _dailyMaxCombo = _currentSession!.maxCombo;
       }
@@ -398,8 +510,29 @@ class GameProvider extends ChangeNotifier {
             unlocked = session.objectsDestroyed >= 100 && 
                        session.duration.inSeconds <= 60;
           } else if (achievement.id == 'shake_master') {
-            // Check if maintained max intensity for 10+ seconds
             unlocked = _maxSustainedHighIntensitySeconds >= achievement.requirement;
+          } else if (achievement.id == 'coin_collector_1k') {
+            unlocked = _userProgress.rageCoins >= 1000;
+          } else if (achievement.id == 'coin_collector_10k') {
+            unlocked = _userProgress.rageCoins >= 10000;
+          } else if (achievement.id == 'theme_collector') {
+            unlocked = _userProgress.unlockedThemes.length >= 4; // default + 3 premium
+          } else if (achievement.id == 'level_10') {
+            unlocked = _userProgress.currentLevel >= 10;
+          } else if (achievement.id == 'level_25') {
+            unlocked = _userProgress.currentLevel >= 25;
+          } else if (achievement.id == 'level_50') {
+            unlocked = _userProgress.currentLevel >= 50;
+          } else if (achievement.id == 'perfect_session') {
+            unlocked = _perfectSession && session.objectsDestroyed >= 20;
+          } else if (achievement.id == 'marathon') {
+            unlocked = session.duration.inSeconds >= 300;
+          } else if (achievement.id == 'early_bird') {
+            final hour = DateTime.now().hour;
+            unlocked = hour >= 5 && hour < 7;
+          } else if (achievement.id == 'night_owl') {
+            final hour = DateTime.now().hour;
+            unlocked = hour >= 0 && hour < 4;
           }
           break;
       }
@@ -555,6 +688,9 @@ class GameProvider extends ChangeNotifier {
     _comboTimer?.cancel();
     _comboTimer = Timer(const Duration(milliseconds: 1500), () {
       if (_currentSession != null) {
+        if (_currentSession!.currentCombo > 0) {
+          _perfectSession = false; // Lost combo
+        }
         _currentSession!.resetCombo();
         notifyListeners();
       }

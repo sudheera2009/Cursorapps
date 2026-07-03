@@ -62,6 +62,47 @@ class GameSession {
   }
 }
 
+// Session record for history tracking
+class SessionRecord {
+  final int damage;
+  final int objects;
+  final int maxCombo;
+  final String modeId;
+  final String peakRage;
+  final int durationSeconds;
+  final DateTime playedAt;
+
+  SessionRecord({
+    required this.damage,
+    required this.objects,
+    required this.maxCombo,
+    required this.modeId,
+    required this.peakRage,
+    required this.durationSeconds,
+    required this.playedAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'damage': damage,
+    'objects': objects,
+    'maxCombo': maxCombo,
+    'modeId': modeId,
+    'peakRage': peakRage,
+    'durationSeconds': durationSeconds,
+    'playedAt': playedAt.toIso8601String(),
+  };
+
+  factory SessionRecord.fromJson(Map<String, dynamic> json) => SessionRecord(
+    damage: json['damage'] ?? 0,
+    objects: json['objects'] ?? 0,
+    maxCombo: json['maxCombo'] ?? 0,
+    modeId: json['modeId'] ?? 'office',
+    peakRage: json['peakRage'] ?? 'calm',
+    durationSeconds: json['durationSeconds'] ?? 0,
+    playedAt: DateTime.tryParse(json['playedAt'] ?? '') ?? DateTime.now(),
+  );
+}
+
 class UserProgress {
   int totalDestruction;
   int totalObjects;
@@ -75,6 +116,20 @@ class UserProgress {
   DateTime lastPlayDate;
   int dailyStreak;
   Set<String> modesPlayed;
+  
+  // Statistics tracking
+  List<SessionRecord> sessionHistory;
+  Map<String, int> modePlayCounts;
+  Map<String, int> rageLevelCounts;
+  int bestSessionDamage;
+  int highestCombo;
+  int mostObjectsSession;
+  int longestSession; // in seconds
+  
+  // Rage Coins (premium currency)
+  int rageCoins;
+  Set<String> unlockedThemes;
+  String currentTheme;
 
   UserProgress({
     this.totalDestruction = 0,
@@ -89,10 +144,24 @@ class UserProgress {
     DateTime? lastPlayDate,
     this.dailyStreak = 0,
     Set<String>? modesPlayed,
+    List<SessionRecord>? sessionHistory,
+    Map<String, int>? modePlayCounts,
+    Map<String, int>? rageLevelCounts,
+    this.bestSessionDamage = 0,
+    this.highestCombo = 0,
+    this.mostObjectsSession = 0,
+    this.longestSession = 0,
+    this.rageCoins = 0,
+    Set<String>? unlockedThemes,
+    this.currentTheme = 'default',
   })  : modeHighScores = modeHighScores ?? {},
         achievements = achievements ?? [],
         lastPlayDate = lastPlayDate ?? DateTime.now(),
-        modesPlayed = modesPlayed ?? {};
+        modesPlayed = modesPlayed ?? {},
+        sessionHistory = sessionHistory ?? [],
+        modePlayCounts = modePlayCounts ?? {},
+        rageLevelCounts = rageLevelCounts ?? {},
+        unlockedThemes = unlockedThemes ?? {'default'};
 
   int get xpForNextLevel => currentLevel * 1000;
 
@@ -106,7 +175,7 @@ class UserProgress {
     }
   }
 
-  void recordSession(GameSession session) {
+  void recordSession(GameSession session, {String peakRageLevel = 'calm'}) {
     totalDestruction += session.totalDamage;
     totalObjects += session.objectsDestroyed;
     totalSessions++;
@@ -117,7 +186,66 @@ class UserProgress {
       modeHighScores[session.mode.id] = session.totalDamage;
     }
 
+    // Track personal records
+    if (session.totalDamage > bestSessionDamage) {
+      bestSessionDamage = session.totalDamage;
+    }
+    if (session.maxCombo > highestCombo) {
+      highestCombo = session.maxCombo;
+    }
+    if (session.objectsDestroyed > mostObjectsSession) {
+      mostObjectsSession = session.objectsDestroyed;
+    }
+    final sessionSecs = session.duration.inSeconds;
+    if (sessionSecs > longestSession) {
+      longestSession = sessionSecs;
+    }
+
+    // Track mode play count
+    modePlayCounts[session.mode.id] = (modePlayCounts[session.mode.id] ?? 0) + 1;
+
+    // Track rage level distribution
+    rageLevelCounts[peakRageLevel] = (rageLevelCounts[peakRageLevel] ?? 0) + 1;
+
+    // Add to session history (keep last 100)
+    sessionHistory.insert(0, SessionRecord(
+      damage: session.totalDamage,
+      objects: session.objectsDestroyed,
+      maxCombo: session.maxCombo,
+      modeId: session.mode.id,
+      peakRage: peakRageLevel,
+      durationSeconds: sessionSecs,
+      playedAt: DateTime.now(),
+    ));
+    if (sessionHistory.length > 100) {
+      sessionHistory.removeLast();
+    }
+
+    // Award rage coins based on performance
+    final coinsEarned = _calculateCoinsEarned(session);
+    rageCoins += coinsEarned;
+
     addXP(session.totalDamage ~/ 100);
+  }
+
+  int _calculateCoinsEarned(GameSession session) {
+    int coins = session.totalDamage ~/ 10000; // Base: 1 coin per $10K
+    coins += session.maxCombo ~/ 5; // Bonus for combos
+    if (session.objectsDestroyed >= 50) coins += 5; // Destruction bonus
+    return coins;
+  }
+
+  void addRageCoins(int amount) {
+    rageCoins += amount;
+  }
+
+  bool unlockTheme(String themeId, int cost) {
+    if (rageCoins >= cost && !unlockedThemes.contains(themeId)) {
+      rageCoins -= cost;
+      unlockedThemes.add(themeId);
+      return true;
+    }
+    return false;
   }
 
   String get formattedTotalDestruction {

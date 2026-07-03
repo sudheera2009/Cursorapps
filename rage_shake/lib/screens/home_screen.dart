@@ -11,6 +11,9 @@ import '../widgets/banner_ad_widget.dart';
 import 'mode_select_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
+import 'stats_screen.dart';
+import 'theme_shop_screen.dart';
+import 'rage_clips_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -142,15 +145,60 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          IconButton(
-            onPressed: () {},
+          PopupMenuButton<String>(
             icon: const Icon(Icons.menu, color: Colors.white),
+            color: AppTheme.cardBackground,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onSelected: (value) {
+              switch (value) {
+                case 'stats':
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const StatsScreen()));
+                  break;
+                case 'shop':
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ThemeShopScreen()));
+                  break;
+                case 'clips':
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const RageClipsScreen()));
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              _buildMenuItem('stats', Icons.bar_chart, 'Statistics', Colors.purple),
+              _buildMenuItem('shop', Icons.palette, 'Theme Shop', Colors.amber),
+              _buildMenuItem('clips', Icons.photo_library, 'Rage Clips', Colors.blue),
+            ],
+          ),
+          // Rage Coins display
+          GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ThemeShopScreen())),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.amber.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.amber.withOpacity(0.4)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('🪙', style: TextStyle(fontSize: 14)),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${provider.userProgress.rageCoins}',
+                    style: AppTheme.numberStyle.copyWith(
+                      color: Colors.amber,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
           const Spacer(),
           Text(
             'RAGE SHAKE',
             style: AppTheme.headlineStyle.copyWith(
-              fontSize: 28,
+              fontSize: 24,
               foreground: Paint()
                 ..shader = const LinearGradient(
                   colors: [
@@ -191,6 +239,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _buildMenuItem(String value, IconData icon, String label, Color color) {
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 12),
+          Text(label, style: AppTheme.bodyStyle),
         ],
       ),
     );
