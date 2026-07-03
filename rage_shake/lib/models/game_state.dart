@@ -73,6 +73,8 @@ class UserProgress {
   int dailyDestruction;
   int dailyGoal;
   DateTime lastPlayDate;
+  int dailyStreak;
+  Set<String> modesPlayed;
 
   UserProgress({
     this.totalDestruction = 0,
@@ -85,9 +87,12 @@ class UserProgress {
     this.dailyDestruction = 0,
     this.dailyGoal = 1000000,
     DateTime? lastPlayDate,
+    this.dailyStreak = 0,
+    Set<String>? modesPlayed,
   })  : modeHighScores = modeHighScores ?? {},
         achievements = achievements ?? [],
-        lastPlayDate = lastPlayDate ?? DateTime.now();
+        lastPlayDate = lastPlayDate ?? DateTime.now(),
+        modesPlayed = modesPlayed ?? {};
 
   int get xpForNextLevel => currentLevel * 1000;
 

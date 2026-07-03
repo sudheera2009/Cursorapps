@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../models/game_state.dart';
+import '../models/achievement.dart';
 import '../providers/game_provider.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/banner_ad_widget.dart';
@@ -41,7 +42,7 @@ class ProfileScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     const InlineBannerAd(),
                     const SizedBox(height: 24),
-                    _buildAchievementsSection(),
+                    _buildAchievementsSection(progress),
                   ],
                 ),
               ),
@@ -265,74 +266,111 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAchievementsSection() {
-    final achievements = [
-      {'icon': Icons.star, 'name': 'First Blood', 'desc': 'Complete first session', 'unlocked': true},
-      {'icon': Icons.whatshot, 'name': 'Rage Master', 'desc': 'Reach Nuclear rage', 'unlocked': false},
-      {'icon': Icons.money, 'name': 'Millionaire', 'desc': 'Destroy \$1M total', 'unlocked': false},
-      {'icon': Icons.bolt, 'name': 'Combo King', 'desc': 'Get 50x combo', 'unlocked': false},
-    ];
+  Widget _buildAchievementsSection(UserProgress progress) {
+    final unlockedIds = progress.achievements.toSet();
+    final unlockedCount = unlockedIds.length;
+    final totalCount = Achievements.all.length;
+    
+    // Sort achievements: unlocked first, then by XP reward
+    final sortedAchievements = List<Achievement>.from(Achievements.all)
+      ..sort((a, b) {
+        final aUnlocked = unlockedIds.contains(a.id);
+        final bUnlocked = unlockedIds.contains(b.id);
+        if (aUnlocked && !bUnlocked) return -1;
+        if (!aUnlocked && bUnlocked) return 1;
+        return b.xpReward.compareTo(a.xpReward);
+      });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'ACHIEVEMENTS',
-          style: AppTheme.subtitleStyle.copyWith(
-            letterSpacing: 2,
-            color: AppTheme.textMuted,
-          ),
+        Row(
+          children: [
+            Text(
+              'ACHIEVEMENTS',
+              style: AppTheme.subtitleStyle.copyWith(
+                letterSpacing: 2,
+                color: AppTheme.textMuted,
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.amber.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$unlockedCount/$totalCount',
+                style: AppTheme.bodyStyle.copyWith(
+                  color: Colors.amber,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
-        ...achievements.map((a) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: GlassCard(
-            padding: const EdgeInsets.all(16),
-            glowColor: a['unlocked'] as bool ? Colors.amber : null,
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: (a['unlocked'] as bool ? Colors.amber : Colors.grey)
-                        .withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
+        ...sortedAchievements.map((achievement) {
+          final isUnlocked = unlockedIds.contains(achievement.id);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: GlassCard(
+              padding: const EdgeInsets.all(16),
+              glowColor: isUnlocked ? achievement.color : null,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: (isUnlocked ? achievement.color : Colors.grey)
+                          .withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      achievement.icon,
+                      color: isUnlocked ? achievement.color : Colors.grey,
+                    ),
                   ),
-                  child: Icon(
-                    a['icon'] as IconData,
-                    color: a['unlocked'] as bool ? Colors.amber : Colors.grey,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        a['name'] as String,
-                        style: AppTheme.subtitleStyle.copyWith(
-                          color: a['unlocked'] as bool ? Colors.white : Colors.grey,
-                          fontSize: 16,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          achievement.name,
+                          style: AppTheme.subtitleStyle.copyWith(
+                            color: isUnlocked ? Colors.white : Colors.grey,
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
-                      Text(
-                        a['desc'] as String,
-                        style: AppTheme.bodyStyle.copyWith(
-                          fontSize: 12,
-                          color: AppTheme.textMuted,
+                        Text(
+                          achievement.description,
+                          style: AppTheme.bodyStyle.copyWith(
+                            fontSize: 12,
+                            color: AppTheme.textMuted,
+                          ),
                         ),
-                      ),
-                    ],
+                        if (!isUnlocked)
+                          Text(
+                            '+${achievement.xpReward} XP',
+                            style: AppTheme.bodyStyle.copyWith(
+                              fontSize: 10,
+                              color: achievement.color.withOpacity(0.7),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                if (a['unlocked'] as bool)
-                  const Icon(Icons.check_circle, color: Colors.amber),
-                if (!(a['unlocked'] as bool))
-                  const Icon(Icons.lock, color: Colors.grey),
-              ],
+                  if (isUnlocked)
+                    Icon(Icons.check_circle, color: achievement.color),
+                  if (!isUnlocked)
+                    const Icon(Icons.lock, color: Colors.grey),
+                ],
+              ),
             ),
-          ),
-        )),
+          );
+        }),
       ],
     ).animate().fadeIn(delay: 400.ms, duration: 500.ms).slideY(begin: 0.2, end: 0);
   }
