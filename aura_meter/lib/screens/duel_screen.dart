@@ -5,6 +5,7 @@ import '../core/theme.dart';
 import '../models/aura_reading.dart';
 import '../providers/aura_provider.dart';
 import '../services/feedback_service.dart';
+import '../widgets/achievement_popup.dart';
 import '../widgets/aura_background.dart';
 import '../widgets/aura_orb.dart';
 import '../widgets/glass_card.dart';
@@ -50,6 +51,7 @@ class _DuelScreenState extends State<DuelScreen> {
       _resolved = true;
       _won = won;
     });
+    if (mounted) await showAchievementUnlocks(context, provider);
   }
 
   void _reset() {

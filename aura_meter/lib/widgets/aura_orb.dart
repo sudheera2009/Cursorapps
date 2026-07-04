@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../services/feedback_service.dart';
 
 /// A glowing, gently pulsing orb that represents an aura.
 class AuraOrb extends StatefulWidget {
@@ -31,7 +32,9 @@ class _AuraOrbState extends State<AuraOrb>
       vsync: this,
       duration: const Duration(seconds: 3),
     );
-    if (widget.pulsing) _controller.repeat(reverse: true);
+    if (widget.pulsing && FeedbackService().animationsEnabled) {
+      _controller.repeat(reverse: true);
+    }
   }
 
   @override

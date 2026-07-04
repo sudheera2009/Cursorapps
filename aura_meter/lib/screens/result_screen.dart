@@ -9,7 +9,9 @@ import '../models/aura_type.dart';
 import '../providers/aura_provider.dart';
 import '../services/ad_service.dart';
 import '../services/feedback_service.dart';
+import '../services/review_service.dart';
 import '../services/share_service.dart';
+import '../widgets/achievement_popup.dart';
 import '../widgets/aura_background.dart';
 import '../widgets/aura_card.dart';
 import '../widgets/banner_ad_widget.dart';
@@ -33,11 +35,21 @@ class _ResultScreenState extends State<ResultScreen> {
     super.initState();
     _confetti = ConfettiController(duration: const Duration(seconds: 2));
     final rarity = widget.reading.type.rarity;
-    if (rarity == AuraRarity.epic ||
+    final isRare = rarity == AuraRarity.epic ||
         rarity == AuraRarity.legendary ||
-        rarity == AuraRarity.mythic) {
-      _confetti.play();
-    }
+        rarity == AuraRarity.mythic;
+    if (isRare) _confetti.play();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final provider = context.read<AuraProvider>();
+      await showAchievementUnlocks(context, provider);
+      // Ask for a store review after a genuinely delightful (rare) moment.
+      if (isRare) {
+        await ReviewService()
+            .maybeRequestReview(totalScans: provider.profile.totalScans);
+      }
+    });
   }
 
   @override
@@ -55,6 +67,17 @@ class _ResultScreenState extends State<ResultScreen> {
         text:
             'I scored ${widget.reading.score} aura (${widget.reading.type.name}) on AURA METER 🔮 Can you beat me? #AuraMeter',
       );
+    }
+  }
+
+  /// Show an interstitial on roughly every third scan when leaving the result,
+  /// then run [action]. Never blocks the user if no ad is ready.
+  void _maybeInterstitialThen(VoidCallback action) {
+    final total = context.read<AuraProvider>().profile.totalScans;
+    if (total > 0 && total % 3 == 0) {
+      AdService().showInterstitialAd(onAdClosed: action);
+    } else {
+      action();
     }
   }
 
@@ -166,8 +189,11 @@ class _ResultScreenState extends State<ResultScreen> {
           child: ElevatedButton.icon(
             onPressed: () {
               FeedbackService().medium();
-              Navigator.pushReplacement(context,
-                  MaterialPageRoute(builder: (_) => const ScanScreen()));
+              _maybeInterstitialThen(() {
+                if (!mounted) return;
+                Navigator.pushReplacement(context,
+                    MaterialPageRoute(builder: (_) => const ScanScreen()));
+              });
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
@@ -187,7 +213,8 @@ class _ResultScreenState extends State<ResultScreen> {
         ),
         const SizedBox(height: 8),
         TextButton(
-          onPressed: () => Navigator.popUntil(context, (r) => r.isFirst),
+          onPressed: () => _maybeInterstitialThen(
+              () => Navigator.popUntil(context, (r) => r.isFirst)),
           child: Text('BACK HOME',
               style: AppTheme.labelStyle
                   .copyWith(color: AppColors.textSecondary)),

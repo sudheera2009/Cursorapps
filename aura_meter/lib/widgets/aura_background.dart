@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
+import '../services/feedback_service.dart';
 
 /// Animated cosmic background: drifting stars plus a couple of slow-moving
 /// nebula blobs tinted by [tint].
@@ -41,7 +42,9 @@ class _AuraBackgroundState extends State<AuraBackground>
       vsync: this,
       duration: const Duration(seconds: 12),
     );
-    if (widget.animate) _controller.repeat();
+    if (widget.animate && FeedbackService().animationsEnabled) {
+      _controller.repeat();
+    }
   }
 
   @override
