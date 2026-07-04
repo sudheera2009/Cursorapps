@@ -14,5 +14,9 @@
 -keep class com.yalantis.ucrop** { *; }
 -keep interface com.yalantis.ucrop** { *; }
 
+# Flutter Play Store split/deferred components are optional and not bundled.
+-dontwarn com.google.android.play.core.**
+-keep class com.google.android.play.core.** { *; }
+
 # Keep annotations
 -keepattributes *Annotation*
