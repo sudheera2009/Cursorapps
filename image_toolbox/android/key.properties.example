@@ -1,0 +1,10 @@
+# Copy this file to android/key.properties and fill in your release keystore
+# details, then run `flutter build appbundle`. Never commit the real file.
+#
+# Create a keystore with:
+#   keytool -genkey -v -keystore ~/image-toolbox-release.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+storePassword=your_store_password
+keyPassword=your_key_password
+keyAlias=upload
+storeFile=/absolute/path/to/image-toolbox-release.jks
