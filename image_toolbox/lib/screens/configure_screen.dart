@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,9 +7,12 @@ import '../models/edit_op.dart';
 import '../models/encode_settings.dart';
 import '../models/enums.dart';
 import '../models/tool.dart';
+import '../pipeline/pipeline_runner.dart';
 import '../providers/jobs_provider.dart';
+import '../providers/recipes_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/live_preview.dart';
 import 'processing_screen.dart';
 
 class ConfigureScreen extends StatefulWidget {
@@ -42,12 +46,22 @@ class _ConfigureScreenState extends State<ConfigureScreen> {
   WatermarkPosition _wmPos = WatermarkPosition.bottomRight;
   double _wmOpacity = 0.6;
 
+  Uint8List? _proxy;
+
   @override
   void initState() {
     super.initState();
     final s = context.read<SettingsProvider>();
     _format = s.defaultFormat;
     _quality = s.defaultQuality;
+    _buildProxy();
+  }
+
+  Future<void> _buildProxy() async {
+    final jobs = context.read<JobsProvider>().jobs;
+    if (jobs.isEmpty) return;
+    final proxy = await compute(makeProxy, jobs.first.sourceBytes);
+    if (mounted) setState(() => _proxy = proxy);
   }
 
   @override
@@ -108,6 +122,78 @@ class _ConfigureScreenState extends State<ConfigureScreen> {
     );
   }
 
+  Future<void> _saveAsRecipe() async {
+    final nameController = TextEditingController(text: widget.tool.name);
+    const emojis = ['⚙️', '🗜️', '📐', '🔄', '🎨', '💧', '🌐', '📸', '✉️', '🔻'];
+    String emoji = widget.tool.emoji;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModal) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: Text('Save as recipe', style: AppTheme.title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: nameController,
+                style: AppTheme.subtitle.copyWith(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Recipe name',
+                  hintStyle: AppTheme.body,
+                  filled: true,
+                  fillColor: AppColors.surfaceAlt,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 6,
+                children: emojis
+                    .map((e) => GestureDetector(
+                          onTap: () => setModal(() => emoji = e),
+                          child: CircleAvatar(
+                            backgroundColor: emoji == e
+                                ? AppColors.primary
+                                : AppColors.surfaceAlt,
+                            child: Text(e,
+                                style: const TextStyle(fontSize: 18)),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+
+    if (saved != true || !mounted) return;
+    final name = nameController.text.trim();
+    if (name.isEmpty) return;
+    await context.read<RecipesProvider>().add(
+          name: name,
+          emoji: emoji,
+          ops: _buildOps(),
+          encode: _buildEncode(),
+        );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saved recipe "$name"')));
+    }
+  }
+
   void _apply() {
     Navigator.pushReplacement(
       context,
@@ -124,13 +210,28 @@ class _ConfigureScreenState extends State<ConfigureScreen> {
   Widget build(BuildContext context) {
     final count = context.watch<JobsProvider>().total;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.tool.name)),
+      appBar: AppBar(
+        title: Text(widget.tool.name),
+        actions: [
+          IconButton(
+            tooltip: 'Save as recipe',
+            icon: const Icon(Icons.bookmark_add_outlined),
+            onPressed: _saveAsRecipe,
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
               children: [
+                LivePreview(
+                  proxyBytes: _proxy,
+                  ops: _buildOps(),
+                  encode: _buildEncode(),
+                ),
+                const SizedBox(height: 12),
                 Text('$count image${count == 1 ? '' : 's'} selected',
                     style: AppTheme.body),
                 const SizedBox(height: 16),
