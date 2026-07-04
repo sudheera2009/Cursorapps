@@ -148,6 +148,37 @@ void main() {
     });
   });
 
+  group('proxy', () {
+    test('makeProxy downscales the longest side to the cap', () {
+      final src = _makeImage(2000, 1000);
+      final proxy = makeProxy(src, maxDim: 720);
+      final decoded = img.decodePng(proxy);
+      expect(decoded, isNotNull);
+      expect(decoded!.width, 720);
+      expect(decoded.height, 360);
+    });
+
+    test('makeProxy leaves small images untouched in size', () {
+      final src = _makeImage(320, 240);
+      final proxy = makeProxy(src, maxDim: 720);
+      final decoded = img.decodePng(proxy);
+      expect(decoded!.width, 320);
+      expect(decoded.height, 240);
+    });
+  });
+
+  group('exif', () {
+    test('keepExif encodes valid jpeg without crashing', () {
+      final src = _makeImage(48, 48);
+      final out = _run(
+        src,
+        const [ResizeOp(mode: ResizeMode.percentage, percent: 50)],
+        const EncodeSettings(format: OutputFormat.jpeg, keepExif: true),
+      );
+      expect(img.decodeJpg(out.bytes), isNotNull);
+    });
+  });
+
   group('serialization', () {
     test('every EditOp round-trips through JSON', () {
       final ops = <EditOp>[

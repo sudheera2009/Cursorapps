@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../core/theme.dart';
@@ -20,15 +21,8 @@ import 'result_screen.dart';
 
 /// Entry point when a tool is tapped: pick images then route to the tool.
 Future<void> openTool(BuildContext context, Tool tool) async {
-  final source = await _askSource(context);
-  if (source == null || !context.mounted) return;
-
-  final picker = PickerService();
-  final jobs = source == _Source.camera
-      ? await picker.pickFromCamera()
-      : await picker.pickFromGallery();
-
-  if (jobs.isEmpty || !context.mounted) return;
+  final jobs = await _pickImages(context);
+  if (jobs == null || jobs.isEmpty || !context.mounted) return;
 
   context.read<JobsProvider>().setSelection(jobs);
 
@@ -44,15 +38,8 @@ Future<void> openTool(BuildContext context, Tool tool) async {
 
 /// Picks images then runs a saved [recipe] straight through the pipeline.
 Future<void> applyRecipe(BuildContext context, Recipe recipe) async {
-  final source = await _askSource(context);
-  if (source == null || !context.mounted) return;
-
-  final picker = PickerService();
-  final jobs = source == _Source.camera
-      ? await picker.pickFromCamera()
-      : await picker.pickFromGallery();
-
-  if (jobs.isEmpty || !context.mounted) return;
+  final jobs = await _pickImages(context);
+  if (jobs == null || jobs.isEmpty || !context.mounted) return;
 
   context.read<JobsProvider>().setSelection(jobs);
   Navigator.push(
@@ -62,6 +49,62 @@ Future<void> applyRecipe(BuildContext context, Recipe recipe) async {
           ProcessingScreen(ops: recipe.ops, encode: recipe.encode),
     ),
   );
+}
+
+/// Prompts for a source, handles permissions, and returns picked images.
+/// Returns null when the user cancels.
+Future<List<ImageJob>?> _pickImages(BuildContext context) async {
+  final source = await _askSource(context);
+  if (source == null || !context.mounted) return null;
+
+  if (source == _Source.camera) {
+    if (!await _ensureCamera(context)) return null;
+    if (!context.mounted) return null;
+  }
+
+  final picker = PickerService();
+  return source == _Source.camera
+      ? picker.pickFromCamera()
+      : picker.pickFromGallery();
+}
+
+/// Ensures camera permission, guiding the user to Settings if permanently
+/// denied. Returns true when granted.
+Future<bool> _ensureCamera(BuildContext context) async {
+  var status = await Permission.camera.status;
+  if (status.isGranted) return true;
+  if (status.isDenied || status.isRestricted) {
+    status = await Permission.camera.request();
+  }
+  if (status.isGranted) return true;
+
+  if (!context.mounted) return false;
+  if (status.isPermanentlyDenied) {
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text('Camera access needed', style: AppTheme.title),
+        content: Text(
+          'Enable camera access in Settings to take a photo to edit.',
+          style: AppTheme.body,
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Not now')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Open Settings')),
+        ],
+      ),
+    );
+    if (open == true) await openAppSettings();
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Camera permission denied')));
+  }
+  return false;
 }
 
 Future<void> _runCrop(BuildContext context, ImageJob job) async {

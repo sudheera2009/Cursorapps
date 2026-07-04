@@ -35,16 +35,14 @@ class ImagePipeline {
 
     var finalBytes = output.bytes;
     var format = output.format;
+    var targetMissed = output.targetMissed;
 
     // Pure Dart cannot encode WebP; finish that step with the native codec.
     if (output.needsWebpEncode) {
       try {
-        final webp = await FlutterImageCompress.compressWithList(
-          output.bytes,
-          format: CompressFormat.webp,
-          quality: output.webpQuality,
-        );
-        finalBytes = webp;
+        final result = await _encodeWebp(output);
+        finalBytes = result.$1;
+        targetMissed = result.$2;
       } catch (e) {
         // Fall back to the PNG intermediate if WebP is unavailable.
         debugPrint('WebP encode failed, falling back to PNG: $e');
@@ -66,7 +64,43 @@ class ImagePipeline {
       height: output.height,
       format: format,
       elapsedMs: DateTime.now().difference(started).inMilliseconds,
-      targetMissed: output.targetMissed,
+      targetMissed: targetMissed,
     );
+  }
+
+  /// Encodes the PNG intermediate to WebP with the native codec. When a target
+  /// size is set, binary-searches quality to fit it. Returns (bytes, missed).
+  Future<(Uint8List, bool)> _encodeWebp(PipelineOutput output) async {
+    // Pass the intermediate's own dimensions so the codec never downscales.
+    Future<Uint8List> encodeAt(int quality) =>
+        FlutterImageCompress.compressWithList(
+          output.bytes,
+          format: CompressFormat.webp,
+          quality: quality,
+          minWidth: output.width,
+          minHeight: output.height,
+          autoCorrectionAngle: false,
+          keepExif: output.keepExif,
+        );
+
+    final targetKb = output.webpTargetKb;
+    if (targetKb == null) {
+      return (await encodeAt(output.webpQuality), false);
+    }
+
+    final targetBytes = targetKb * 1024;
+    int lo = 10, hi = 95;
+    Uint8List best = await encodeAt(hi);
+    while (lo <= hi) {
+      final mid = (lo + hi) ~/ 2;
+      final candidate = await encodeAt(mid);
+      if (candidate.length <= targetBytes) {
+        best = candidate;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return (best, best.length > targetBytes);
   }
 }

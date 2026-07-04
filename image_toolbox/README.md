@@ -90,10 +90,19 @@ dart run flutter_native_splash:create
 See [`RELEASE.md`](RELEASE.md) for the full store checklist (production AdMob ids,
 signing, app bundle / IPA, listings).
 
+## ⚙️ Known build warning
+
+`flutter_image_compress` still applies the legacy Kotlin Gradle Plugin, so a
+build prints a KGP deprecation warning. It is harmless with the current Flutter
+version and will be resolved upstream; nothing to do on our side today.
+
 ## 🗺️ Roadmap (post-MVP)
 
 - Layered editor canvas (freeform text/stickers/draw)
 - Background removal & selfie segmentation (on-device ML)
 - OCR / text extraction, EXIF viewer/editor
 - PDF ⇄ image, collage/grid maker
-- Cloud-free "save as recipe" from any configure screen
+
+_Done since the first MVP:_ live processed preview, save-as-recipe from any
+configure screen, WebP target-size auto-tuning, EXIF preservation, and
+camera-permission UX.

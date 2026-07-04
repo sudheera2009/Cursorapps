@@ -30,6 +30,8 @@ class PipelineOutput {
   final OutputFormat format;
   final bool needsWebpEncode;
   final int webpQuality;
+  final int? webpTargetKb;
+  final bool keepExif;
   final bool targetMissed;
 
   const PipelineOutput({
@@ -39,8 +41,24 @@ class PipelineOutput {
     required this.format,
     this.needsWebpEncode = false,
     this.webpQuality = 85,
+    this.webpTargetKb,
+    this.keepExif = false,
     this.targetMissed = false,
   });
+}
+
+/// Builds a small, orientation-corrected PNG proxy for fast live previews.
+/// Safe to run in an isolate. Falls back to the source bytes on failure.
+Uint8List makeProxy(Uint8List bytes, {int maxDim = 720}) {
+  final decoded = img.decodeImage(bytes);
+  if (decoded == null) return bytes;
+  var image = img.bakeOrientation(decoded);
+  if (image.width > maxDim || image.height > maxDim) {
+    image = image.width >= image.height
+        ? img.copyResize(image, width: maxDim, interpolation: img.Interpolation.average)
+        : img.copyResize(image, height: maxDim, interpolation: img.Interpolation.average);
+  }
+  return Uint8List.fromList(img.encodePng(image));
 }
 
 /// Pure, synchronous pipeline. Safe to run inside an isolate (no plugins).
@@ -50,8 +68,12 @@ PipelineOutput runPipeline(PipelineRequest req) {
     throw const FormatException('Unsupported or corrupt image');
   }
 
-  // Respect EXIF orientation before any geometry ops.
+  // Respect EXIF orientation before any geometry ops. bakeOrientation copies
+  // the EXIF data and clears the orientation tag (since it is now baked in).
   var image = img.bakeOrientation(decoded);
+
+  // Geometry/pixel transforms can drop EXIF, so snapshot it to re-apply later.
+  final keptExif = img.ExifData.from(image.exif);
 
   final ops = req.opsJson.map(EditOp.fromJson).toList();
   final encode = EncodeSettings.fromJson(req.encodeJson);
@@ -66,10 +88,8 @@ PipelineOutput runPipeline(PipelineRequest req) {
     format = image.hasAlpha ? OutputFormat.png : OutputFormat.jpeg;
   }
 
-  // Strip metadata unless explicitly kept.
-  if (!encode.keepExif) {
-    image.exif = img.ExifData();
-  }
+  // Preserve or strip metadata per settings.
+  image.exif = encode.keepExif ? keptExif : img.ExifData();
 
   switch (format) {
     case OutputFormat.png:
@@ -88,6 +108,8 @@ PipelineOutput runPipeline(PipelineRequest req) {
         format: OutputFormat.webp,
         needsWebpEncode: true,
         webpQuality: encode.quality,
+        webpTargetKb: encode.targetSizeKb,
+        keepExif: encode.keepExif,
       );
     case OutputFormat.jpeg:
     case OutputFormat.keepOriginal:
@@ -310,6 +332,7 @@ img.Image _flattenIfNeeded(img.Image image, int flattenColor) {
   final bg = img.Image(width: image.width, height: image.height, numChannels: 3);
   img.fill(bg, color: img.ColorRgba8(r, g, b, a));
   img.compositeImage(bg, image);
+  bg.exif = image.exif;
   return bg;
 }
 
