@@ -5,7 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:barrel_trader/models/trade.dart';
 import 'package:barrel_trader/providers/trading_provider.dart';
-import 'package:barrel_trader/services/price_engine.dart';
+import 'package:barrel_trader/services/context_provider.dart';
+import 'package:barrel_trader/services/market_data_source.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -13,7 +14,8 @@ void main() {
   Future<TradingProvider> freshProvider() async {
     SharedPreferences.setMockInitialValues({});
     final p = TradingProvider(
-      engine: PriceEngine(random: Random(1)),
+      dataSource: SimulatedMarketDataSource(random: Random(1)),
+      contextProvider: SimulatedContextProvider(random: Random(1)),
       // Long interval so the timer never fires during a test.
       tickInterval: const Duration(hours: 1),
     );

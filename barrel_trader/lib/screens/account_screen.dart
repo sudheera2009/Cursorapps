@@ -6,6 +6,7 @@ import '../core/theme.dart';
 import '../providers/trading_provider.dart';
 import '../widgets/panel_card.dart';
 import '../widgets/stat_box.dart';
+import 'alert_settings_screen.dart';
 
 class AccountScreen extends StatelessWidget {
   const AccountScreen({super.key});
@@ -113,6 +114,25 @@ class AccountScreen extends StatelessWidget {
             padding: EdgeInsets.zero,
             child: Column(
               children: [
+                ListTile(
+                  leading: const Icon(Icons.notifications_active,
+                      color: AppColors.gas),
+                  title: Text('Alerts & channels',
+                      style: AppTheme.subtitleStyle
+                          .copyWith(color: AppColors.textPrimary)),
+                  subtitle: Text(
+                      p.alertsEnabled
+                          ? 'On · min ${(p.alertConfidence * 100).round()}% confidence · ${p.telegramConfigured ? 'Telegram connected' : 'in-app only'}'
+                          : 'Off',
+                      style: AppTheme.bodyStyle.copyWith(fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right,
+                      color: AppColors.textMuted),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) => const AlertSettingsScreen()),
+                  ),
+                ),
+                const Divider(height: 1, color: AppColors.cardBorder),
                 ListTile(
                   leading:
                       const Icon(Icons.refresh, color: AppColors.crude),

@@ -4,12 +4,15 @@ import 'package:provider/provider.dart';
 import '../core/formatting.dart';
 import '../core/theme.dart';
 import '../models/instrument.dart';
+import '../models/market_context.dart';
 import '../models/position.dart';
 import '../models/trade.dart';
+import '../models/trade_signal.dart';
 import '../providers/trading_provider.dart';
 import '../widgets/change_pill.dart';
 import '../widgets/panel_card.dart';
 import '../widgets/price_chart.dart';
+import '../widgets/signal_badge.dart';
 import 'trade_ticket.dart';
 
 class InstrumentScreen extends StatelessWidget {
@@ -123,9 +126,15 @@ class InstrumentScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+          _signalCard(inst, p),
+          const SizedBox(height: 16),
           _sessionStats(inst, p),
           const SizedBox(height: 16),
           if (position != null) _positionCard(context, inst, p, position),
+          if (position != null) const SizedBox(height: 16),
+          _indicatorCard(inst, p),
+          const SizedBox(height: 16),
+          _fundamentalsCard(p),
           const SizedBox(height: 16),
           _contractCard(inst),
         ],
@@ -306,6 +315,127 @@ class InstrumentScreen extends StatelessWidget {
     );
   }
 
+  Widget _signalCard(Instrument inst, TradingProvider p) {
+    final signal = p.signalFor(inst.id);
+    if (signal == null) return const SizedBox.shrink();
+    return PanelCard(
+      borderColor: signal.action.color.withValues(alpha: 0.4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('AI SIGNAL', style: AppTheme.labelStyle),
+              const Spacer(),
+              SignalBadge(action: signal.action),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text('${signal.strength} · ${signal.confidencePercent}% confidence',
+                  style: AppTheme.mono(size: 13, color: signal.action.color)),
+              const Spacer(),
+              Text('P(up) ${(signal.probabilityUp * 100).toStringAsFixed(0)}%',
+                  style: AppTheme.bodyStyle.copyWith(fontSize: 12)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ConfidenceBar(
+              confidence: signal.confidence, color: signal.action.color),
+          const SizedBox(height: 14),
+          ...signal.reasons.map((r) => Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(r.bullish ? Icons.add : Icons.remove,
+                        size: 14,
+                        color: r.bullish ? AppColors.up : AppColors.down),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(r.text,
+                          style: AppTheme.bodyStyle.copyWith(fontSize: 12.5)),
+                    ),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _indicatorCard(Instrument inst, TradingProvider p) {
+    final ind = p.indicatorsFor(inst.id);
+    String px(double v) => Fmt.price(v, inst.tickSize);
+    return PanelCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('TECHNICAL INDICATORS', style: AppTheme.labelStyle),
+          const SizedBox(height: 12),
+          _statRow('EMA 9 / 21 / 50', '${px(ind.ema9)} / ${px(ind.ema21)} / ${px(ind.ema50)}'),
+          const Divider(height: 20),
+          _statRow('RSI (14)', ind.rsi14.toStringAsFixed(1),
+              color: ind.rsi14 >= 70
+                  ? AppColors.down
+                  : (ind.rsi14 <= 30 ? AppColors.up : null)),
+          const Divider(height: 20),
+          _statRow('MACD hist', ind.macdHist.toStringAsFixed(3),
+              color: AppColors.forChange(ind.macdHist)),
+          const Divider(height: 20),
+          _statRow('ATR (14)', ind.atr14.toStringAsFixed(3)),
+          const Divider(height: 20),
+          _statRow('Bollinger %b', '${(ind.bbPercentB * 100).toStringAsFixed(0)}%'),
+          const Divider(height: 20),
+          _statRow('ADX (14)', ind.adx14.toStringAsFixed(1),
+              color: ind.adx14 >= 25 ? AppColors.gas : null),
+          const Divider(height: 20),
+          _statRow('+DI / -DI',
+              '${ind.plusDI.toStringAsFixed(1)} / ${ind.minusDI.toStringAsFixed(1)}'),
+          const Divider(height: 20),
+          _statRow('VWAP', px(ind.vwap)),
+        ],
+      ),
+    );
+  }
+
+  Widget _fundamentalsCard(TradingProvider p) {
+    return Builder(builder: (context) {
+      final inst = Instruments.byId(instrumentId);
+      final MarketContext ctx = p.contextFor(inst.id);
+      String pct(double v) => '${(v * 100).toStringAsFixed(0)}%';
+      Color c(double v) => AppColors.forChange(v);
+      return PanelCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text('FUNDAMENTALS', style: AppTheme.labelStyle),
+                const Spacer(),
+                Text(ctx.sentimentLabel,
+                    style: AppTheme.labelStyle
+                        .copyWith(color: c(ctx.newsSentiment))),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _statRow('News sentiment', pct(ctx.newsSentiment),
+                color: c(ctx.newsSentiment)),
+            const Divider(height: 20),
+            _statRow('Headlines', '${ctx.headlineCount}'),
+            const Divider(height: 20),
+            _statRow('EIA inventory surprise', pct(ctx.inventorySurprise),
+                color: c(ctx.inventorySurprise)),
+            const Divider(height: 20),
+            _statRow('Weather demand', pct(ctx.weatherFactor),
+                color: c(ctx.weatherFactor)),
+          ],
+        ),
+      );
+    });
+  }
+
   Widget _contractCard(Instrument inst) {
     return PanelCard(
       child: Column(
@@ -325,12 +455,15 @@ class InstrumentScreen extends StatelessWidget {
     );
   }
 
-  Widget _statRow(String label, String value) {
+  Widget _statRow(String label, String value, {Color? color}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: AppTheme.bodyStyle),
-        Text(value, style: AppTheme.mono(size: 14)),
+        Flexible(child: Text(label, style: AppTheme.bodyStyle)),
+        const SizedBox(width: 12),
+        Text(value,
+            style: AppTheme.mono(
+                size: 14, color: color ?? AppColors.textPrimary)),
       ],
     );
   }

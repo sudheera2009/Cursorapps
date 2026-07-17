@@ -5,6 +5,7 @@ import 'account_screen.dart';
 import 'history_screen.dart';
 import 'market_screen.dart';
 import 'portfolio_screen.dart';
+import 'signals_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,6 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static const _screens = [
     MarketScreen(),
+    SignalsScreen(),
     PortfolioScreen(),
     HistoryScreen(),
     AccountScreen(),
@@ -50,6 +52,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: Icon(Icons.candlestick_chart_outlined),
                 selectedIcon: Icon(Icons.candlestick_chart, color: AppColors.primary),
                 label: 'Markets',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.auto_graph_outlined),
+                selectedIcon: Icon(Icons.auto_graph, color: AppColors.primary),
+                label: 'Signals',
               ),
               NavigationDestination(
                 icon: Icon(Icons.account_balance_wallet_outlined),

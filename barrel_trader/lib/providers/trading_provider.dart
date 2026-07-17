@@ -5,11 +5,19 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/candle.dart';
 import '../models/instrument.dart';
+import '../models/market_context.dart';
 import '../models/position.dart';
 import '../models/quote.dart';
+import '../models/signal_alert.dart';
 import '../models/trade.dart';
-import '../services/price_engine.dart';
+import '../models/trade_signal.dart';
+import '../services/context_provider.dart';
+import '../services/indicators.dart';
+import '../services/market_data_source.dart';
+import '../services/notification_channel.dart';
+import '../services/signal_engine.dart';
 
 /// Outcome of attempting to place an order.
 class OrderResult {
@@ -20,18 +28,28 @@ class OrderResult {
   const OrderResult(this.success, this.message, [this.trade]);
 }
 
-/// Single source of truth for BARREL: the simulated market, the paper trading
-/// account, and persistence of both across launches.
+/// Single source of truth for BARREL: the simulated market, the technical /
+/// prediction / signal pipeline, the paper trading account, alerts, and
+/// persistence of everything across launches.
 class TradingProvider extends ChangeNotifier {
-  TradingProvider({PriceEngine? engine, this.tickInterval = const Duration(seconds: 1)})
-      : _engine = engine ?? PriceEngine();
+  TradingProvider({
+    MarketDataSource? dataSource,
+    SignalEngine? signalEngine,
+    ContextProvider? contextProvider,
+    this.tickInterval = const Duration(seconds: 1),
+  })  : _data = dataSource ?? SimulatedMarketDataSource(),
+        _signalEngine = signalEngine ?? SignalEngine(),
+        _context = contextProvider ?? SimulatedContextProvider();
 
-  final PriceEngine _engine;
+  final MarketDataSource _data;
+  final SignalEngine _signalEngine;
+  final ContextProvider _context;
   final Duration tickInterval;
   Timer? _timer;
 
   static const double startingCash = 100000;
   static const double _eps = 1e-6;
+  static const Duration alertCooldown = Duration(seconds: 45);
 
   double _cash = startingCash;
   double _realizedPnl = 0;
@@ -42,6 +60,19 @@ class TradingProvider extends ChangeNotifier {
   Set<String> _watchlist = Instruments.all.map((i) => i.id).toSet();
   bool _ready = false;
   bool _running = false;
+
+  // Signal pipeline state.
+  final Map<String, TradeSignal> _signals = {};
+  final List<SignalAlert> _alerts = [];
+  final Map<String, DateTime> _lastAlertAt = {};
+  final Map<String, SignalAction> _lastAlertAction = {};
+  int _tickCount = 0;
+
+  // Alert configuration.
+  bool _alertsEnabled = true;
+  double _alertConfidence = 0.6;
+  String _telegramToken = '';
+  String _telegramChatId = '';
 
   // ---------------------------------------------------------------------------
   // Getters
@@ -54,9 +85,68 @@ class TradingProvider extends ChangeNotifier {
   DateTime get createdAt => _createdAt;
   List<Trade> get trades => List.unmodifiable(_trades);
   Set<String> get watchlist => _watchlist;
+  String get dataSourceName => _data.name;
+  bool get liveFeed => _data.isLive;
 
-  Quote quote(String id) => _engine.quoteFor(id);
-  double priceOf(String id) => _engine.quoteFor(id).price;
+  Quote quote(String id) => _data.quoteFor(id);
+  double priceOf(String id) => _data.priceOf(id);
+  List<Candle> candlesFor(String id) => _data.candlesFor(id);
+  IndicatorSnapshot indicatorsFor(String id) =>
+      Indicators.snapshot(_data.candlesFor(id));
+  MarketContext contextFor(String id) => _context.contextFor(id);
+
+  TradeSignal? signalFor(String id) => _signals[id];
+
+  /// All current signals, most actionable (highest confidence, non-WAIT) first.
+  List<TradeSignal> get signals {
+    final list = _signals.values.toList();
+    list.sort((a, b) {
+      final aw = a.action == SignalAction.wait ? 0 : 1;
+      final bw = b.action == SignalAction.wait ? 0 : 1;
+      if (aw != bw) return bw - aw;
+      return b.confidence.compareTo(a.confidence);
+    });
+    return list;
+  }
+
+  List<SignalAlert> get alerts => List.unmodifiable(_alerts);
+  bool get alertsEnabled => _alertsEnabled;
+  double get alertConfidence => _alertConfidence;
+  String get telegramToken => _telegramToken;
+  String get telegramChatId => _telegramChatId;
+  bool get telegramConfigured =>
+      _telegramToken.isNotEmpty && _telegramChatId.isNotEmpty;
+
+  bool isWatched(String id) => _watchlist.contains(id);
+
+  double get equity {
+    double v = _cash;
+    for (final p in _positions.values) {
+      if (p.isFlat) continue;
+      v += p.marketValue(priceOf(p.instrumentId));
+    }
+    return v;
+  }
+
+  double get openPnl {
+    double v = 0;
+    for (final p in _positions.values) {
+      if (p.isFlat) continue;
+      v += p.unrealizedPnl(priceOf(p.instrumentId));
+    }
+    return v;
+  }
+
+  double get totalPnl => equity - startingCash;
+  double get totalPnlPercent => totalPnl / startingCash * 100;
+
+  double get investedCapital {
+    double v = 0;
+    for (final p in _positions.values) {
+      if (!p.isFlat) v += p.costBasis;
+    }
+    return v;
+  }
 
   List<Position> get openPositions =>
       _positions.values.where((p) => !p.isFlat).toList()
@@ -70,49 +160,9 @@ class TradingProvider extends ChangeNotifier {
     return (p == null || p.isFlat) ? null : p;
   }
 
-  bool isWatched(String id) => _watchlist.contains(id);
-
-  /// Total mark-to-market account value (cash + open position values).
-  double get equity {
-    double v = _cash;
-    for (final p in _positions.values) {
-      if (p.isFlat) continue;
-      v += p.marketValue(priceOf(p.instrumentId));
-    }
-    return v;
-  }
-
-  /// Sum of unrealized P&L across all open positions.
-  double get openPnl {
-    double v = 0;
-    for (final p in _positions.values) {
-      if (p.isFlat) continue;
-      v += p.unrealizedPnl(priceOf(p.instrumentId));
-    }
-    return v;
-  }
-
-  /// Lifetime P&L: equity above the initial deposit.
-  double get totalPnl => equity - startingCash;
-  double get totalPnlPercent => totalPnl / startingCash * 100;
-
-  /// Cash committed as cost basis across open positions.
-  double get investedCapital {
-    double v = 0;
-    for (final p in _positions.values) {
-      if (!p.isFlat) v += p.costBasis;
-    }
-    return v;
-  }
-
   int get tradeCount => _trades.length;
-
-  int get winningTrades =>
-      _trades.where((t) => t.realizedPnl > _eps).length;
-
-  int get closingTrades =>
-      _trades.where((t) => t.realizedPnl.abs() > _eps).length;
-
+  int get winningTrades => _trades.where((t) => t.realizedPnl > _eps).length;
+  int get closingTrades => _trades.where((t) => t.realizedPnl.abs() > _eps).length;
   double get winRate =>
       closingTrades == 0 ? 0 : winningTrades / closingTrades * 100;
 
@@ -120,8 +170,9 @@ class TradingProvider extends ChangeNotifier {
   // Lifecycle
   // ---------------------------------------------------------------------------
   Future<void> initialize() async {
-    _engine.initialize();
+    _data.initialize();
     await _load();
+    _recomputeSignals();
     _ready = true;
     start();
     notifyListeners();
@@ -150,7 +201,11 @@ class TradingProvider extends ChangeNotifier {
   }
 
   void _onTick() {
-    _engine.tick();
+    _data.tick();
+    _tickCount++;
+    if (_tickCount % 5 == 0) _context.tick();
+    // Refresh signals every other tick to keep them responsive but cheap.
+    if (_tickCount % 2 == 0) _recomputeSignals();
     final eq = equity;
     if (eq > _peakEquity) _peakEquity = eq;
     notifyListeners();
@@ -163,17 +218,109 @@ class TradingProvider extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Signal pipeline
+  // ---------------------------------------------------------------------------
+  void _recomputeSignals() {
+    for (final inst in Instruments.all) {
+      final signal = _signalEngine.generate(
+        instrumentId: inst.id,
+        candles: _data.candlesFor(inst.id),
+        context: _context.contextFor(inst.id),
+      );
+      _signals[inst.id] = signal;
+      _maybeAlert(signal);
+    }
+  }
+
+  void _maybeAlert(TradeSignal signal) {
+    if (!_alertsEnabled) return;
+    if (signal.action == SignalAction.wait) return;
+    if (signal.confidence < _alertConfidence) return;
+
+    final id = signal.instrumentId;
+    final now = DateTime.now();
+    final lastAction = _lastAlertAction[id];
+    final lastAt = _lastAlertAt[id];
+    final onCooldown =
+        lastAt != null && now.difference(lastAt) < alertCooldown;
+    if (lastAction == signal.action && onCooldown) return;
+
+    final inst = Instruments.byId(id);
+    final price = priceOf(id);
+    final reason = signal.reasons.isNotEmpty ? signal.reasons.first.text : '';
+    final message =
+        '${signal.action.label} ${inst.symbol} (${inst.name})\n'
+        'Price: ${price.toStringAsFixed(inst.tickSize < 0.01 ? 3 : 2)}\n'
+        'Confidence: ${signal.confidencePercent}% (${signal.strength})\n'
+        '$reason\n— BARREL signal';
+
+    final alert = SignalAlert(
+      id: '${now.microsecondsSinceEpoch}',
+      instrumentId: id,
+      action: signal.action,
+      confidence: signal.confidence,
+      price: price,
+      message: message,
+      timestamp: now,
+    );
+    _alerts.insert(0, alert);
+    if (_alerts.length > 100) _alerts.removeRange(100, _alerts.length);
+    _lastAlertAction[id] = signal.action;
+    _lastAlertAt[id] = now;
+    _dispatch(alert);
+    _save();
+  }
+
+  void _dispatch(SignalAlert alert) {
+    final channels = <NotificationChannel>[
+      TelegramChannel(botToken: _telegramToken, chatId: _telegramChatId),
+      const WhatsAppChannel(),
+      const EmailChannel(),
+    ];
+    for (final c in channels) {
+      if (c.enabled) {
+        // Fire-and-forget; channels never throw.
+        c.send(alert);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Alert configuration
+  // ---------------------------------------------------------------------------
+  void setAlertsEnabled(bool value) {
+    _alertsEnabled = value;
+    _save();
+    notifyListeners();
+  }
+
+  void setAlertConfidence(double value) {
+    _alertConfidence = value.clamp(0.0, 1.0);
+    _save();
+    notifyListeners();
+  }
+
+  void setTelegram({required String token, required String chatId}) {
+    _telegramToken = token.trim();
+    _telegramChatId = chatId.trim();
+    _save();
+    notifyListeners();
+  }
+
+  void clearAlerts() {
+    _alerts.clear();
+    _save();
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
   // Trading
   // ---------------------------------------------------------------------------
-
-  /// Places a market order for [lots] of [instrumentId] on the given [side].
-  ///
-  /// Uses a fully-funded (no leverage) cash model: increasing exposure requires
-  /// enough free cash to cover the notional, which is locked as cost basis and
-  /// released (plus/minus realized P&L) when the position is reduced.
   OrderResult placeOrder(String instrumentId, OrderSide side, double lots) {
     if (!_ready) return const OrderResult(false, 'Market not ready yet.');
-    if (lots <= 0) return const OrderResult(false, 'Enter a lot size greater than 0.');
+    if (lots <= 0) {
+      return const OrderResult(false, 'Enter a lot size greater than 0.');
+    }
 
     final inst = Instruments.byId(instrumentId);
     final cs = inst.contractSize;
@@ -182,7 +329,7 @@ class TradingProvider extends ChangeNotifier {
 
     final existing = _positions[instrumentId];
     final l = existing?.lots ?? 0;
-    var avg = existing?.avgPrice ?? 0;
+    final avg = existing?.avgPrice ?? 0;
 
     final sameDirection = l == 0 || (l > 0) == (d > 0);
 
@@ -194,7 +341,8 @@ class TradingProvider extends ChangeNotifier {
     if (sameDirection) {
       final cost = lots * price * cs;
       if (cost > _cash + _eps) {
-        return OrderResult(false, 'Insufficient buying power. Need ${_usd(cost)} of free cash.');
+        return OrderResult(false,
+            'Insufficient buying power. Need ${_usd(cost)} of free cash.');
       }
       projectedCash -= cost;
       final newAbs = l.abs() + lots;
@@ -207,10 +355,10 @@ class TradingProvider extends ChangeNotifier {
       projectedCash += reduceQty * avg * cs + realized;
       final extra = lots - reduceQty;
       if (extra > _eps) {
-        // Position flips direction; the remainder opens a fresh position.
         final openCost = extra * price * cs;
         if (openCost > projectedCash + _eps) {
-          return OrderResult(false, 'Insufficient buying power to flip. Need ${_usd(openCost)}.');
+          return OrderResult(
+              false, 'Insufficient buying power to flip. Need ${_usd(openCost)}.');
         }
         projectedCash -= openCost;
         newAvg = price;
@@ -248,12 +396,12 @@ class TradingProvider extends ChangeNotifier {
     _save();
     notifyListeners();
 
-    final pnlNote = realized.abs() > _eps
-        ? ' (P&L ${_usd(realized)})'
-        : '';
+    final pnlNote = realized.abs() > _eps ? ' (P&L ${_usd(realized)})' : '';
+    final priceStr =
+        inst.tickSize < 0.01 ? price.toStringAsFixed(3) : price.toStringAsFixed(2);
     return OrderResult(
       true,
-      '${side.verb} ${_lots(lots)} ${inst.symbol} @ ${inst.symbol == 'NG' ? price.toStringAsFixed(3) : price.toStringAsFixed(2)}$pnlNote',
+      '${side.verb} ${_lots(lots)} ${inst.symbol} @ $priceStr$pnlNote',
       trade,
     );
   }
@@ -289,8 +437,8 @@ class TradingProvider extends ChangeNotifier {
     _cash = prefs.getDouble('cash') ?? startingCash;
     _realizedPnl = prefs.getDouble('realizedPnl') ?? 0;
     _peakEquity = prefs.getDouble('peakEquity') ?? startingCash;
-    _createdAt = DateTime.tryParse(prefs.getString('createdAt') ?? '') ??
-        DateTime.now();
+    _createdAt =
+        DateTime.tryParse(prefs.getString('createdAt') ?? '') ?? DateTime.now();
 
     final posJson = prefs.getString('positions');
     _positions.clear();
@@ -306,15 +454,28 @@ class TradingProvider extends ChangeNotifier {
     _trades.clear();
     if (tradesJson != null) {
       final List<dynamic> decoded = json.decode(tradesJson);
-      _trades.addAll(decoded.map((e) => Trade.fromJson(e as Map<String, dynamic>)));
+      _trades
+          .addAll(decoded.map((e) => Trade.fromJson(e as Map<String, dynamic>)));
+    }
+
+    final alertsJson = prefs.getString('alerts');
+    _alerts.clear();
+    if (alertsJson != null) {
+      final List<dynamic> decoded = json.decode(alertsJson);
+      _alerts.addAll(
+          decoded.map((e) => SignalAlert.fromJson(e as Map<String, dynamic>)));
     }
 
     final watch = prefs.getStringList('watchlist');
     if (watch != null && watch.isNotEmpty) {
-      _watchlist = watch
-          .where((id) => Instruments.all.any((i) => i.id == id))
-          .toSet();
+      _watchlist =
+          watch.where((id) => Instruments.all.any((i) => i.id == id)).toSet();
     }
+
+    _alertsEnabled = prefs.getBool('alertsEnabled') ?? true;
+    _alertConfidence = prefs.getDouble('alertConfidence') ?? 0.6;
+    _telegramToken = prefs.getString('telegramToken') ?? '';
+    _telegramChatId = prefs.getString('telegramChatId') ?? '';
   }
 
   Future<void> _save() async {
@@ -323,15 +484,17 @@ class TradingProvider extends ChangeNotifier {
     await prefs.setDouble('realizedPnl', _realizedPnl);
     await prefs.setDouble('peakEquity', _peakEquity);
     await prefs.setString('createdAt', _createdAt.toIso8601String());
+    await prefs.setString('positions',
+        json.encode(_positions.values.map((p) => p.toJson()).toList()));
     await prefs.setString(
-      'positions',
-      json.encode(_positions.values.map((p) => p.toJson()).toList()),
-    );
-    await prefs.setString(
-      'trades',
-      json.encode(_trades.take(300).map((t) => t.toJson()).toList()),
-    );
+        'trades', json.encode(_trades.take(300).map((t) => t.toJson()).toList()));
+    await prefs.setString('alerts',
+        json.encode(_alerts.take(100).map((a) => a.toJson()).toList()));
     await prefs.setStringList('watchlist', _watchlist.toList());
+    await prefs.setBool('alertsEnabled', _alertsEnabled);
+    await prefs.setDouble('alertConfidence', _alertConfidence);
+    await prefs.setString('telegramToken', _telegramToken);
+    await prefs.setString('telegramChatId', _telegramChatId);
   }
 
   Future<void> resetAccount() async {
@@ -341,6 +504,9 @@ class TradingProvider extends ChangeNotifier {
     _createdAt = DateTime.now();
     _positions.clear();
     _trades.clear();
+    _alerts.clear();
+    _lastAlertAt.clear();
+    _lastAlertAction.clear();
     _watchlist = Instruments.all.map((i) => i.id).toSet();
     await _save();
     notifyListeners();
